@@ -67,6 +67,37 @@ The deterministic ZIP claim is deliberately narrow: the same input file tree
 produces the same archive bytes. PyInstaller binary reproducibility remains
 `NOT_ESTABLISHED` until two independent clean builds are compared.
 
+## Offline integrity verification
+
+After copying or downloading the complete versioned release directory, verify
+it without rebuilding or contacting a network service:
+
+```text
+python -m tools.windows_release verify --release-dir <release-dir>
+```
+
+The verifier checks the exact top-level and application file sets, every
+recorded byte size and SHA-256, canonical ZIP entries and content, the ZIP
+checksum sidecar, and all fail-closed signing and scientific-acceptance
+fields. Success is reported as JSON containing:
+
+- `verification: "OK"`;
+- the verified `directory` and `archive` paths;
+- `archive_sha256` and `checksum_file`;
+- the manifest `name` and `version`;
+- `source_provenance.status`, `git_head`, and `git_worktree_clean`;
+- `claims.code_signing`, `authenticity`, `distribution_readiness`,
+  `installer`, `acceptance_status`, `comparison_result`, and
+  `physical_focus_claim`.
+
+For the current internal build, `claims.code_signing` is `NOT_SIGNED`,
+authenticity is `NOT_ESTABLISHED`, distribution readiness is
+`INTERNAL_VALIDATION_ONLY`, and installer is `NOT_BUILT`.
+
+This is an integrity check, not an authenticity check. Even after successful
+verification, publisher authenticity remains `NOT_ESTABLISHED`; the command
+does not validate or imply an Authenticode signature.
+
 ## Verification and claims
 
 `RELEASE-MANIFEST.json` must retain all of these values:
