@@ -5,12 +5,13 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import platform
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image
+from PIL import Image, __version__ as pillow_version
 
 from .comparison import ComparisonResult, compare_images
 from .depth_scan import DepthScanResult, PreparedWavefront, PropagationParameters, write_metrics_csv
@@ -93,6 +94,15 @@ def _input_records(inputs: Mapping[str, str | Path]) -> list[dict[str, object]]:
     return records
 
 
+def _environment_record() -> dict[str, str]:
+    return {
+        "python": platform.python_version(),
+        "python_implementation": platform.python_implementation(),
+        "numpy": np.__version__,
+        "pillow": pillow_version,
+    }
+
+
 def _output_record(path: Path, array: np.ndarray | None = None) -> dict[str, object]:
     record: dict[str, object] = {
         "file": path.name,
@@ -168,6 +178,13 @@ def export_session(
         "test_id": "U02-T2",
         "status": U02_T2_STATUS,
         "status_reason": U02_T2_STATUS_REASON,
+        "environment": _environment_record(),
+        "units": {
+            "depth": "um",
+            "gradient_energy": "normalized_amplitude_squared_per_pixel_squared",
+            "amplitude_std": "normalized_amplitude",
+            "selected_plane": "normalized_amplitude",
+        },
         "parameters": parameters.as_dict(),
         "selected_depth_um": selected_depth,
         "inputs": _input_records(inputs),

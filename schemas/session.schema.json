@@ -9,6 +9,8 @@
     "test_id",
     "status",
     "status_reason",
+    "environment",
+    "units",
     "parameters",
     "selected_depth_um",
     "inputs",
@@ -22,6 +24,14 @@
     "test_id": { "const": "U02-T2" },
     "status": { "enum": ["BEKLİYOR", "TEKRARLANDI", "SAHA VERİSİ GEREKİR"] },
     "status_reason": { "type": "string", "minLength": 1 },
+    "environment": {
+      "type": "object",
+      "required": ["python", "python_implementation", "numpy", "pillow"]
+    },
+    "units": {
+      "type": "object",
+      "required": ["depth", "gradient_energy", "amplitude_std", "selected_plane"]
+    },
     "parameters": {
       "type": "object",
       "required": [

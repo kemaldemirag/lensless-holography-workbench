@@ -8,6 +8,7 @@
   standard-deviation metrics;
 - centred region-of-interest measurement;
 - stable metric CSV, float32 TIFF, session JSON, and SHA-256 manifest;
+- explicit runtime versions and measurement units in every session;
 - exact TIFF pixel-array verification on reopen;
 - aligned-image difference maps and centre-line profiles;
 - unit, negative, and K03 real-data reproducibility tests.

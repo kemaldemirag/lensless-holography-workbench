@@ -55,6 +55,9 @@ class SessionTests(unittest.TestCase):
         np.testing.assert_array_equal(reopened, expected)
         self.assertEqual(session["status"], "BEKLIYOR")
         self.assertEqual(session["schema_version"], "1.0")
+        self.assertEqual(session["environment"]["numpy"], np.__version__)
+        self.assertEqual(session["units"]["depth"], "um")
+        self.assertEqual(session["units"]["selected_plane"], "normalized_amplitude")
         self.assertIsNone(session["comparison"])
 
     def test_repeated_export_has_identical_managed_files(self) -> None:
