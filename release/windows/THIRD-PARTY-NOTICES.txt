@@ -1,0 +1,20 @@
+THIRD-PARTY NOTICES - INTERNAL VALIDATION BUILD
+
+This build embeds components whose upstream licenses remain applicable:
+
+- CPython 3.12: Python Software Foundation License Version 2.
+  https://docs.python.org/3/license.html
+- Tcl/Tk 8.6: Tcl/Tk license.
+  https://www.tcl-lang.org/software/tcltk/license.html
+- NumPy 2.3.5: BSD-3-Clause license. The bundled wheel may contain additional
+  binary-component notices; see NumPy's installed license metadata.
+  https://numpy.org/doc/stable/license.html
+- Pillow 13.0.0: HPND / MIT-CMU style license.
+  https://github.com/python-pillow/Pillow/blob/main/LICENSE
+- PyInstaller 6.22.3 bootloader: GPL-2.0-or-later with the PyInstaller
+  bootloader exception.
+  https://pyinstaller.org/en/stable/license.html
+
+This notice does not assign a license to the Lensless Holography Workbench
+project itself. A project LICENSE has not yet been selected, so this portable
+build is restricted to internal validation and is not a public distribution.

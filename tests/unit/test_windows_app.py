@@ -132,7 +132,7 @@ class WindowsAppHelpersTests(unittest.TestCase):
             metadata["project"]["gui-scripts"]["holography-workbench-gui"],
             "lensless_holography_workbench.windows_app:main",
         )
-        self.assertEqual(metadata["project"]["version"], "0.2.0")
+        self.assertEqual(metadata["project"]["version"], "0.3.0")
         self.assertIn("Windows desktop shell", metadata["project"]["description"])
 
 
