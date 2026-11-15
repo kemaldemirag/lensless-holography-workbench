@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -135,6 +136,49 @@ class SessionTests(unittest.TestCase):
                     selected_depth_um=1.0,
                     inputs=inputs,
                 )
+
+    def test_write_failure_leaves_no_partial_session(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            session_dir = base / "session"
+            with patch(
+                "lensless_holography_workbench.session.save_float_tiff",
+                side_effect=OSError("simulated disk failure"),
+            ):
+                with self.assertRaisesRegex(OSError, "simulated disk failure"):
+                    export_session(
+                        session_dir,
+                        prepared=self.prepared,
+                        scan=self.scan,
+                        parameters=self.parameters,
+                        selected_depth_um=1.0,
+                        inputs=self._inputs(base),
+                    )
+
+            self.assertFalse(session_dir.exists())
+            self.assertFalse(
+                any(path.name.startswith(".session.tmp-") for path in base.iterdir())
+            )
+
+    def test_rejects_nonempty_unmanaged_destination(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            session_dir = base / "session"
+            session_dir.mkdir()
+            marker = session_dir / "keep.txt"
+            marker.write_text("user data", encoding="utf-8")
+
+            with self.assertRaises(FileExistsError):
+                export_session(
+                    session_dir,
+                    prepared=self.prepared,
+                    scan=self.scan,
+                    parameters=self.parameters,
+                    selected_depth_um=1.0,
+                    inputs=self._inputs(base),
+                )
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "user data")
 
     def test_reopen_rejects_missing_output_manifest_coverage(self) -> None:
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:

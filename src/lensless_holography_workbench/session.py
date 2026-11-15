@@ -6,6 +6,8 @@ import csv
 import hashlib
 import json
 import platform
+import shutil
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -179,64 +181,74 @@ def export_session(
         comparison = compare_images(selected_float32, reference, line_row=comparison_line_row)
 
     output = Path(output_directory)
-    managed_names = {
-        "metrics.csv",
-        "selected-plane.tiff",
-        "difference-map.tiff",
-        "line-profile.csv",
-        "session.json",
-        "sha256.json",
-    }
-    if output.exists() and any((output / name).exists() for name in managed_names):
-        raise FileExistsError("session directory already contains managed outputs")
-    output.mkdir(parents=True, exist_ok=True)
+    if output.exists():
+        if not output.is_dir() or any(output.iterdir()):
+            raise FileExistsError("session destination must not exist or must be empty")
+        output.rmdir()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent)
+    )
+    try:
+        metrics_path = write_metrics_csv(scan, staging / "metrics.csv")
+        selected_path = save_float_tiff(
+            staging / "selected-plane.tiff", selected_float32
+        )
 
-    metrics_path = write_metrics_csv(scan, output / "metrics.csv")
-    selected_path = save_float_tiff(output / "selected-plane.tiff", selected_float32)
+        outputs: dict[str, object] = {
+            "metrics": _output_record(metrics_path),
+            "selected_plane": _output_record(selected_path, selected_float32),
+        }
+        comparison_summary: dict[str, object] | None = None
+        if comparison is not None:
+            difference_float32 = np.asarray(comparison.difference, dtype=np.float32)
+            difference_path = save_float_tiff(
+                staging / "difference-map.tiff", difference_float32
+            )
+            profile_path = staging / "line-profile.csv"
+            _write_line_profile(profile_path, comparison)
+            outputs["difference_map"] = _output_record(
+                difference_path, difference_float32
+            )
+            outputs["line_profile"] = _output_record(profile_path)
+            comparison_summary = comparison.as_summary()
 
-    outputs: dict[str, object] = {
-        "metrics": _output_record(metrics_path),
-        "selected_plane": _output_record(selected_path, selected_float32),
-    }
-    comparison_summary: dict[str, object] | None = None
-    if comparison is not None:
-        difference_float32 = np.asarray(comparison.difference, dtype=np.float32)
-        difference_path = save_float_tiff(output / "difference-map.tiff", difference_float32)
-        profile_path = output / "line-profile.csv"
-        _write_line_profile(profile_path, comparison)
-        outputs["difference_map"] = _output_record(difference_path, difference_float32)
-        outputs["line_profile"] = _output_record(profile_path)
-        comparison_summary = comparison.as_summary()
+        session: dict[str, Any] = {
+            "schema_version": SESSION_SCHEMA_VERSION,
+            "product_id": "U02",
+            "test_id": "U02-T2",
+            "status": U02_T2_STATUS,
+            "status_reason": U02_T2_STATUS_REASON,
+            "environment": _environment_record(),
+            "units": {
+                "depth": "um",
+                "gradient_energy": "normalized_amplitude_squared_per_pixel_squared",
+                "amplitude_std": "normalized_amplitude",
+                "selected_plane": "normalized_amplitude",
+            },
+            "parameters": parameters.as_dict(),
+            "selected_depth_um": selected_depth,
+            "inputs": input_records,
+            "scan": scan.as_summary(),
+            "outputs": outputs,
+            "comparison": comparison_summary,
+        }
+        session_path = staging / "session.json"
+        _write_json(session_path, session)
 
-    session: dict[str, Any] = {
-        "schema_version": SESSION_SCHEMA_VERSION,
-        "product_id": "U02",
-        "test_id": "U02-T2",
-        "status": U02_T2_STATUS,
-        "status_reason": U02_T2_STATUS_REASON,
-        "environment": _environment_record(),
-        "units": {
-            "depth": "um",
-            "gradient_energy": "normalized_amplitude_squared_per_pixel_squared",
-            "amplitude_std": "normalized_amplitude",
-            "selected_plane": "normalized_amplitude",
-        },
-        "parameters": parameters.as_dict(),
-        "selected_depth_um": selected_depth,
-        "inputs": input_records,
-        "scan": scan.as_summary(),
-        "outputs": outputs,
-        "comparison": comparison_summary,
-    }
-    session_path = output / "session.json"
-    _write_json(session_path, session)
-
-    manifest: dict[str, str] = {}
-    for path in sorted(output.iterdir(), key=lambda item: item.name):
-        if path.is_file() and path.name != "sha256.json":
-            manifest[path.name] = sha256_file(path)
-    _write_json(output / "sha256.json", {"algorithm": "sha256", "files": manifest})
-    return session
+        manifest: dict[str, str] = {}
+        for path in sorted(staging.iterdir(), key=lambda item: item.name):
+            if path.is_file() and path.name != "sha256.json":
+                manifest[path.name] = sha256_file(path)
+        _write_json(
+            staging / "sha256.json",
+            {"algorithm": "sha256", "files": manifest},
+        )
+        staging.replace(output)
+        return session
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
 
 def reopen_session(
