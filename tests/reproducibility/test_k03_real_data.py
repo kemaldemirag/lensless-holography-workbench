@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import unittest
@@ -13,13 +14,27 @@ from lensless_holography_workbench.depth_scan import PropagationParameters, eval
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-DEFAULT_K03 = (
+EXPERIMENT_ROOT = (
     REPOSITORY.parent.parent
     / "003-Proje Kayıtları"
     / "deneyler"
     / "15.11.2026"
-    / "source-package"
 )
+DEFAULT_K03 = EXPERIMENT_ROOT / "source-package"
+REQUIRED_RELATIVE_PATHS = (
+    Path("veri/image01.jpg"),
+    Path("veri/bg01.jpg"),
+    Path("veri/bg02.jpg"),
+    Path("veri/bg03.jpg"),
+    Path("sonuclar/hologram.csv"),
+    Path("sonuclar/ozet.json"),
+)
+EXPECTED_INPUT_SHA256 = {
+    "bg01.jpg": "ef60eea4ac055f4b71781092eae0c8f227fa0f5a31208907bc33b1c41cf7667b",
+    "bg02.jpg": "4636c89ef144ba53b074654b7f27ec2bc0330d9d9c5176891397fa827851f196",
+    "bg03.jpg": "d8dec73658316929696d73188e89e0a2b0bd0f56176121abd511da98752e7c8e",
+    "image01.jpg": "b313374f90ec2ef124e815e0071b427af418d8c12238a6174c93817d4a7d5a01",
+}
 
 
 def _load_grayscale(path: Path) -> np.ndarray:
@@ -27,22 +42,43 @@ def _load_grayscale(path: Path) -> np.ndarray:
         return np.asarray(image.convert("L"), dtype=np.float64)
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _contains_required_files(candidate: Path) -> bool:
+    return candidate.is_dir() and all((candidate / relative).is_file() for relative in REQUIRED_RELATIVE_PATHS)
+
+
+def _resolve_source_package() -> Path | None:
+    configured = os.environ.get("K03_SOURCE_PACKAGE")
+    if configured:
+        candidate = Path(configured)
+        return candidate if _contains_required_files(candidate) else None
+    if _contains_required_files(DEFAULT_K03):
+        return DEFAULT_K03
+    runs = EXPERIMENT_ROOT / "runs"
+    if runs.is_dir():
+        for candidate in sorted((path for path in runs.rglob("*") if path.is_dir()), reverse=True):
+            if _contains_required_files(candidate):
+                return candidate
+    return None
+
+
 class K03RealDataReproducibilityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.source = Path(os.environ.get("K03_SOURCE_PACKAGE", DEFAULT_K03))
-        required = [
-            cls.source / "veri" / "image01.jpg",
-            cls.source / "veri" / "bg01.jpg",
-            cls.source / "veri" / "bg02.jpg",
-            cls.source / "veri" / "bg03.jpg",
-            cls.source / "sonuclar" / "hologram.csv",
-            cls.source / "sonuclar" / "ozet.json",
-        ]
-        if not all(path.is_file() for path in required):
+        cls.source = _resolve_source_package()
+        if cls.source is None:
             raise unittest.SkipTest("hash-verified K03 inputs are not present")
 
     def test_all_21_metrics_match_k03_golden_values(self) -> None:
+        for name, expected_sha256 in EXPECTED_INPUT_SHA256.items():
+            self.assertEqual(_sha256(self.source / "veri" / name), expected_sha256)
         signal = _load_grayscale(self.source / "veri" / "image01.jpg")
         backgrounds = [_load_grayscale(self.source / "veri" / f"bg0{index}.jpg") for index in (1, 2, 3)]
         parameters = PropagationParameters(
