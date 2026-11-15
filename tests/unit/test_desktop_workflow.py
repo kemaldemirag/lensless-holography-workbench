@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from lensless_holography_workbench.depth_scan import PropagationParameters
+from lensless_holography_workbench.depth_scan import PreparedWavefront
 from lensless_holography_workbench.desktop_workflow import (
     COMPARISON_RESULT,
     DesktopWorkflow,
@@ -104,6 +105,38 @@ class DesktopWorkflowTests(unittest.TestCase):
         self.assertEqual(first.acceptance_status, U02_T2_STATUS)
         self.assertEqual(first.comparison_result, COMPARISON_RESULT)
         self.assertIsNotNone(first.metric)
+
+    def test_scan_propagates_each_depth_only_once(self) -> None:
+        workflow = self._configured()
+        original = PreparedWavefront.amplitude_at
+
+        with patch.object(
+            PreparedWavefront,
+            "amplitude_at",
+            autospec=True,
+            side_effect=lambda prepared, depth: original(prepared, depth),
+        ) as amplitude_at:
+            self._scan(workflow)
+
+        self.assertEqual(amplitude_at.call_count, 3)
+
+    def test_16_bit_tiff_inputs_keep_their_dynamic_range(self) -> None:
+        y, x = np.indices((32, 32), dtype=np.uint16)
+        signal = self.base / "signal-16bit.tiff"
+        background = self.base / "background-16bit.tiff"
+        Image.fromarray(1000 + 10 * x + 5 * y).save(signal)
+        Image.fromarray(np.full((32, 32), 1000, dtype=np.uint16)).save(
+            background
+        )
+        workflow = DesktopWorkflow(parameters=parameters())
+        workflow.configure_inputs(signal, [background])
+
+        self._scan(workflow)
+
+        metric = workflow.plane_preview(0.0).metric
+        self.assertIsNotNone(metric)
+        assert metric is not None
+        self.assertGreater(metric.amplitude_std, 0.0)
 
     def test_input_or_parameter_change_invalidates_cached_scan(self) -> None:
         workflow = self._configured()

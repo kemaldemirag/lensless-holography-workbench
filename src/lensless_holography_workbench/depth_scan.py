@@ -231,12 +231,15 @@ class PreparedWavefront:
         return np.asarray(amplitude[top:bottom, left:right], dtype=np.float64)
 
 
-def _measure(depth_um: float, amplitude: np.ndarray) -> DepthMetric:
-    gradient_y, gradient_x = np.gradient(amplitude)
+def measure_depth_plane(depth_um: float, amplitude: np.ndarray) -> DepthMetric:
+    """Measure one reconstructed plane without recomputing propagation."""
+
+    image = _as_image(amplitude, name="amplitude")
+    gradient_y, gradient_x = np.gradient(image)
     return DepthMetric(
         depth_um=float(depth_um),
         gradient_energy=float(np.mean(gradient_x**2 + gradient_y**2)),
-        amplitude_std=float(np.std(amplitude)),
+        amplitude_std=float(np.std(image)),
     )
 
 
@@ -249,7 +252,10 @@ def scan_depths(
         raise ValueError("at least one depth is required")
     if not np.isfinite(depths).all():
         raise ValueError("all depths must be finite")
-    metrics = tuple(_measure(depth, prepared.amplitude_at(depth)) for depth in depths)
+    metrics = tuple(
+        measure_depth_plane(depth, prepared.amplitude_at(depth))
+        for depth in depths
+    )
     return DepthScanResult(
         metrics=metrics,
         input_shape=prepared.input_shape,

@@ -24,7 +24,8 @@ from .depth_scan import (
     DepthScanResult,
     PreparedWavefront,
     PropagationParameters,
-    evaluate_depth_scan,
+    measure_depth_plane,
+    normalize_hologram,
 )
 from .session import (
     U02_T2_STATUS,
@@ -137,7 +138,10 @@ class PlanePreview:
 
 def _load_grayscale(path: Path) -> np.ndarray:
     with Image.open(path) as image:
-        return np.asarray(image.convert("L"), dtype=np.float64)
+        # Pillow's ``L`` conversion quantizes every source to 8 bit.  ``F``
+        # preserves integer/float TIFF dynamic range while still converting
+        # colour inputs to one luminance plane.
+        return np.asarray(image.convert("F"), dtype=np.float64)
 
 
 def _input_hashes(inputs: InputSelection) -> tuple[tuple[str, str], ...]:
@@ -379,26 +383,33 @@ class DesktopWorkflow:
             if request.cancel_event.is_set():
                 return False
 
-            prepared, scan = evaluate_depth_scan(
-                signal,
-                backgrounds,
+            normalized = normalize_hologram(signal, backgrounds)
+            prepared = PreparedWavefront.from_normalized(
+                normalized,
                 request.parameters,
             )
-            depths = tuple(float(metric.depth_um) for metric in scan.metrics)
+            depths = tuple(float(depth) for depth in request.parameters.depths_um())
             total = len(depths)
             if progress is not None:
                 progress(0, total)
 
             planes: dict[float, np.ndarray] = {}
+            metrics: list[DepthMetric] = []
             for completed, depth in enumerate(depths, start=1):
                 if request.cancel_event.is_set():
                     return False
-                planes[depth] = np.asarray(
-                    prepared.amplitude_at(depth),
-                    dtype=np.float32,
-                )
+                amplitude = prepared.amplitude_at(depth)
+                metrics.append(measure_depth_plane(depth, amplitude))
+                planes[depth] = np.asarray(amplitude, dtype=np.float32)
                 if progress is not None:
                     progress(completed, total)
+
+            scan = DepthScanResult(
+                metrics=tuple(metrics),
+                input_shape=prepared.input_shape,
+                roi_bounds=prepared.roi_bounds,
+                source_fingerprint=prepared.source_fingerprint,
+            )
 
             preview_range = _preview_bounds(planes)
             if reference is not None:
