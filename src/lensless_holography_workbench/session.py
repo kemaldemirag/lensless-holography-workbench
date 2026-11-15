@@ -52,6 +52,10 @@ def save_float_tiff(path: str | Path, array: np.ndarray) -> Path:
 
 def load_float_tiff(path: str | Path) -> np.ndarray:
     with Image.open(path) as image:
+        if image.format != "TIFF" or image.mode != "F":
+            raise ValueError(
+                "session/reference TIFF must contain one 32-bit floating-point plane"
+            )
         array = np.asarray(image, dtype=np.float32).copy()
     if array.ndim != 2:
         raise ValueError("session TIFF must contain one two-dimensional plane")

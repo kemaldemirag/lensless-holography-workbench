@@ -7,9 +7,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
+from PIL import Image
 
 from lensless_holography_workbench.depth_scan import PropagationParameters, evaluate_depth_scan
-from lensless_holography_workbench.session import export_session, reopen_session, sha256_file
+from lensless_holography_workbench.session import (
+    export_session,
+    load_float_tiff,
+    reopen_session,
+    sha256_file,
+)
 
 
 class SessionTests(unittest.TestCase):
@@ -60,6 +66,16 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(session["units"]["depth"], "um")
         self.assertEqual(session["units"]["selected_plane"], "normalized_amplitude")
         self.assertIsNone(session["comparison"])
+
+    def test_load_float_tiff_rejects_integer_sample_format(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            path = Path(temporary) / "integer-reference.tiff"
+            Image.fromarray(
+                np.full((16, 16), 4095, dtype=np.uint16)
+            ).save(path)
+
+            with self.assertRaisesRegex(ValueError, "32-bit floating-point"):
+                load_float_tiff(path)
 
     def test_repeated_export_has_identical_managed_files(self) -> None:
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
