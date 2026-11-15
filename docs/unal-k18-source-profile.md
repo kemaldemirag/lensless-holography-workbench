@@ -39,10 +39,14 @@ Consequently:
 The clearest published example is the single-microorganism block on the pinned
 site:
 
-- hologram `c0025.jpg`, Git blob `f4218e67...`;
-- reference `c0039.jpg`, Git blob `98510a0d...`;
-- parameter screenshot `OneMicrorganism_ReconstructionParameters.jpg`;
-- expected intensity image `OneMicrorganism_Intensity.jpg`.
+- hologram `c0025.jpg`, Git blob
+  `f4218e67ca133e28ab2c2e66e46d9399ad153031`;
+- reference `c0039.jpg`, Git blob
+  `98510a0d67853ef87e68a8115eee67be754e69f6`;
+- parameter screenshot `OneMicrorganism_ReconstructionParameters.jpg`, Git
+  blob `dd537fde038a78e924b3f1dfb855021d977c89fc`;
+- expected intensity image `OneMicrorganism_Intensity.jpg`, Git blob
+  `8d5519fc90c45c583ec5774952525b1552928cef`.
 
 The parameter values are embedded in an image. They must be transcribed and
 independently checked before an executable benchmark configuration is added.
