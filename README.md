@@ -1,10 +1,11 @@
 # Lensless Holography Workbench
 
-This repository contains the deterministic processing core and the first
-Windows desktop shell for product U02 in the 15 November 2026 model reports.
-It reproduces an angular-spectrum depth scan, keeps every reconstructed plane
-available for inspection, and exports a hash-verified file-based session.
-Physical-focus acceptance remains outside this slice.
+This repository contains the deterministic processing core, Windows desktop
+shell, and internal portable-build workflow for product U02 in the 15 November
+2026 model reports. Version 0.3.0 reproduces an angular-spectrum depth scan,
+keeps every reconstructed plane available for inspection, and exports a
+hash-verified file-based session. Physical-focus acceptance remains outside
+this slice.
 
 The core records numerical metrics without claiming that the largest focus
 metric is the physical focus. U02-T2 remains `BEKLİYOR` until a comparison
@@ -15,6 +16,7 @@ threshold is defined before evaluating a published reference pair.
 - Python 3.12
 - NumPy 2.3.5
 - Pillow 13.0.0
+- PyInstaller 6.22.3 for the optional Windows release workflow
 
 Run tests with the workspace Python runtime and `PYTHONPATH=src`:
 
@@ -68,4 +70,25 @@ reference comparison as `NOT_EVALUATED`; it cannot produce PASS or FAIL.
 
 See [Windows workflow](docs/windows-workflow.md) for the operational sequence,
 input constraints, and current packaging boundary.
+
+## Windows portable validation build
+
+The 0.3.0 release workflow builds a PyInstaller `onedir` application, runs
+frozen-runtime numerical and hidden-UI smoke tests, then publishes an atomic
+portable directory and deterministic ZIP with exact file hashes and sizes.
+Install the hash-locked Windows x64 / CPython 3.12 build environment and run:
+
+```text
+python -m pip install --require-hashes -r requirements-release.lock
+python -m tools.windows_release build --repo-root . --output-dir dist/releases
+```
+
+Every generated manifest deliberately reports `NOT_SIGNED`, authenticity
+`NOT_ESTABLISHED`, distribution readiness `INTERNAL_VALIDATION_ONLY`, and
+installer `NOT_BUILT`. The repository has no selected project license,
+publisher identity, Authenticode certificate, SignTool, or validated installer
+toolchain, so this artifact is not a signed public release.
+
+See [Windows release workflow](docs/windows-release.md) for build inputs,
+verification rules, artifact structure, and the remaining release gates.
 

@@ -15,17 +15,26 @@
 - a Tkinter Windows desktop shell with asynchronous scan progress,
   cancellation, cached-plane navigation, verified session export, and
   inspection-only session reopen;
+- a PyInstaller 6.22.3 Windows x64 `onedir` build with frozen NumPy FFT,
+  JPEG, float TIFF, and hidden-Tk smoke tests;
+- hash-locked release dependencies, exact file-set SHA-256 manifests,
+  deterministic portable ZIP creation, and atomic release publication;
 - unit, negative, and K03 real-data reproducibility tests.
 
 ## Not implemented
 
-- signed/standalone Windows packaging and installer;
+- project license and publisher identity;
+- Authenticode signing and signature verification;
+- a validated, signed Windows installer and upgrade/uninstall workflow;
 - published UNAL reference-pair alignment;
 - customer-approved similarity threshold;
 - physical-focus calibration;
 - Raspberry Pi RAW acquisition and metadata binding.
 
-The desktop entry point is intended for an installed Python environment. A
-standalone executable, code signing, installer, and installer-level Windows
-validation are not part of the current slice.
+Version 0.3.0 can produce a standalone portable application for internal
+validation. Its release metadata is fail-closed: `NOT_SIGNED`, authenticity
+`NOT_ESTABLISHED`, distribution readiness `INTERNAL_VALIDATION_ONLY`, and
+installer `NOT_BUILT`. Hashes establish integrity, not publisher authenticity.
+Public distribution remains blocked until the project license, publisher,
+certificate, signing tools, and installer validation are established.
 

@@ -55,7 +55,13 @@ threshold and therefore cannot display or export PASS or FAIL.
 
 ## Packaging boundary
 
-The current entry point runs from an installed Python 3.12 environment and
-uses the Tk runtime supplied with that environment. A standalone executable,
-code signing, installer, and installer-level Windows test are not yet
-provided.
+The regular entry point runs from an installed Python 3.12 environment and
+uses its Tk runtime. Version 0.3.0 also provides an internal portable Windows
+x64 build workflow. The frozen application must pass numerical, image-format,
+and hidden-Tk smoke tests before the atomic release directory and ZIP are
+published.
+
+The portable build is explicitly `NOT_SIGNED`; publisher authenticity is
+`NOT_ESTABLISHED`, and an installer is `NOT_BUILT`. See
+[Windows release workflow](windows-release.md) for the release controls and
+remaining public-distribution gates.
