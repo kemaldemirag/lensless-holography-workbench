@@ -662,6 +662,23 @@ def verify_release_archive(
     archive_path = Path(archive_path)
     release_root = Path(release_directory)
     manifest = verify_release_directory(release_root, packaged=packaged)
+    _verify_release_archive_contents(
+        archive_path,
+        release_root,
+        manifest,
+        root_name=root_name,
+    )
+
+
+def _verify_release_archive_contents(
+    archive_path: Path,
+    release_root: Path,
+    manifest: dict[str, object],
+    *,
+    root_name: str | None = None,
+) -> None:
+    """Compare a ZIP to an already verified manifest without unbounded reads."""
+
     archive_root = root_name or release_root.name
     validate_release_member(archive_root)
     expected_relative = [MANIFEST_NAME, *[row["path"] for row in manifest["files"]]]
@@ -669,47 +686,76 @@ def verify_release_archive(
         PurePosixPath(archive_root, relative).as_posix()
         for relative in expected_relative
     ]
-    with zipfile.ZipFile(archive_path) as archive:
-        if archive.comment:
-            raise ReleaseError("release archive comment must be empty")
-        infos = archive.infolist()
-        names = [info.filename for info in infos]
-        validate_member_names(names)
-        if names != sorted(names) or names != sorted(expected_members):
-            raise ReleaseError("release archive has an unexpected or unsorted file set")
-        for info in infos:
-            if info.is_dir() or info.date_time != ZIP_TIMESTAMP:
-                raise ReleaseError("release archive metadata is not deterministic")
-            if (
-                info.compress_type != zipfile.ZIP_DEFLATED
-                or info.create_system != 3
-                or info.extra
-                or (info.external_attr >> 16) != 0o100644
-            ):
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            if archive.comment:
+                raise ReleaseError("release archive comment must be empty")
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            validate_member_names(names)
+            if names != sorted(names) or names != sorted(expected_members):
                 raise ReleaseError(
-                    "release archive permissions or compression are not canonical"
+                    "release archive has an unexpected or unsorted file set"
                 )
-            relative = PurePosixPath(info.filename).relative_to(archive_root)
-            path = release_root / Path(*relative.parts)
-            if archive.read(info) != path.read_bytes():
-                raise ReleaseError(f"release archive content mismatch: {info.filename}")
+            for info in infos:
+                if info.is_dir() or info.date_time != ZIP_TIMESTAMP:
+                    raise ReleaseError(
+                        "release archive metadata is not deterministic"
+                    )
+                if (
+                    info.compress_type != zipfile.ZIP_DEFLATED
+                    or info.create_system != 3
+                    or info.extra
+                    or (info.external_attr >> 16) != 0o100644
+                ):
+                    raise ReleaseError(
+                        "release archive permissions or compression are not canonical"
+                    )
+                relative = PurePosixPath(info.filename).relative_to(archive_root)
+                path = release_root / Path(*relative.parts)
+                if info.file_size != path.stat().st_size:
+                    raise ReleaseError(
+                        f"release archive size mismatch: {info.filename}"
+                    )
+                with archive.open(info) as archived, path.open("rb") as expected:
+                    while True:
+                        archive_chunk = archived.read(1024 * 1024)
+                        expected_chunk = expected.read(1024 * 1024)
+                        if archive_chunk != expected_chunk:
+                            raise ReleaseError(
+                                "release archive content mismatch: "
+                                f"{info.filename}"
+                            )
+                        if not archive_chunk:
+                            break
+    except ReleaseError:
+        raise
+    except (
+        EOFError,
+        NotImplementedError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        zipfile.BadZipFile,
+        zipfile.LargeZipFile,
+        zlib.error,
+    ) as exc:
+        raise ReleaseError("release archive is invalid or unreadable") from exc
 
 
-def verify_release_bundle(release_directory: str | Path) -> ReleaseArtifacts:
-    """Self-test a published directory, archive, checksum, and claims."""
-
+def _verify_release_bundle_state(
+    release_directory: str | Path,
+) -> tuple[ReleaseArtifacts, dict[str, object]]:
     root = Path(release_directory)
     manifest = verify_release_directory(root, packaged=True)
-    expected_name = (
-        f"{manifest['name']}-{manifest['version']}-windows-x64"
-    )
+    expected_name = f"{manifest['name']}-{manifest['version']}-windows-x64"
     if root.name != expected_name:
         raise ReleaseError(
             f"release directory name mismatch: expected {expected_name!r}"
         )
     archive = root / f"{root.name}.zip"
     checksum_file = root / f"{archive.name}.sha256"
-    verify_release_archive(archive, root, packaged=True)
+    _verify_release_archive_contents(archive, root, manifest)
     archive_hash = sha256_file(archive)
     expected_checksum = f"{archive_hash}  {archive.name}\n"
     try:
@@ -718,12 +764,20 @@ def verify_release_bundle(release_directory: str | Path) -> ReleaseArtifacts:
         raise ReleaseError("release checksum file is not valid ASCII") from exc
     if actual_checksum != expected_checksum:
         raise ReleaseError("release archive checksum does not match")
-    return ReleaseArtifacts(
+    artifacts = ReleaseArtifacts(
         directory=root,
         archive=archive,
         archive_sha256=archive_hash,
         checksum_file=checksum_file,
     )
+    return artifacts, manifest
+
+
+def verify_release_bundle(release_directory: str | Path) -> ReleaseArtifacts:
+    """Self-test a published directory, archive, checksum, and claims."""
+
+    artifacts, _manifest = _verify_release_bundle_state(release_directory)
+    return artifacts
 
 
 def assemble_portable_release(
@@ -941,12 +995,50 @@ def _parser() -> argparse.ArgumentParser:
     )
     build.add_argument("--repo-root", type=Path, default=repository_root())
     build.add_argument("--output-dir", type=Path)
+
+    verify = subparsers.add_parser(
+        "verify",
+        description="Verify a published portable directory and ZIP",
+    )
+    verify.add_argument("--release-dir", type=Path, required=True)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.command == "package":
+    if args.command == "verify":
+        artifacts, manifest = _verify_release_bundle_state(args.release_dir)
+        build_environment = manifest["build_environment"]
+        signing = manifest["code_signing"]
+        authenticity = manifest["authenticity"]
+        readiness = manifest["distribution_readiness"]
+        boundary = manifest["acceptance_boundary"]
+        result = {
+            "verification": "OK",
+            "directory": str(artifacts.directory),
+            "archive": str(artifacts.archive),
+            "archive_sha256": artifacts.archive_sha256,
+            "checksum_file": str(artifacts.checksum_file),
+            "name": manifest["name"],
+            "version": manifest["version"],
+            "source_provenance": {
+                "status": build_environment.get("source_provenance"),
+                "git_head": build_environment.get("git_head"),
+                "git_worktree_clean": build_environment.get(
+                    "git_worktree_clean"
+                ),
+            },
+            "claims": {
+                "code_signing": signing["status"],
+                "authenticity": authenticity["status"],
+                "distribution_readiness": readiness["status"],
+                "installer": readiness["installer"],
+                "acceptance_status": boundary["status"],
+                "comparison_result": boundary["comparison_result"],
+                "physical_focus_claim": boundary["physical_focus_claim"],
+            },
+        }
+    elif args.command == "package":
         pyproject = args.pyproject or repository_root() / "pyproject.toml"
         metadata = read_project_metadata(pyproject)
         artifacts = assemble_portable_release(
@@ -954,6 +1046,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.output_dir,
             metadata,
         )
+        result = {
+            "directory": str(artifacts.directory),
+            "archive": str(artifacts.archive),
+            "archive_sha256": artifacts.archive_sha256,
+            "checksum_file": str(artifacts.checksum_file),
+            "code_signing": "NOT_SIGNED",
+        }
     else:
         root = args.repo_root.resolve()
         metadata = read_project_metadata(root / "pyproject.toml")
@@ -965,15 +1064,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             metadata,
             source_repository=root,
         )
+        result = {
+            "directory": str(artifacts.directory),
+            "archive": str(artifacts.archive),
+            "archive_sha256": artifacts.archive_sha256,
+            "checksum_file": str(artifacts.checksum_file),
+            "code_signing": "NOT_SIGNED",
+        }
     print(
         json.dumps(
-            {
-                "directory": str(artifacts.directory),
-                "archive": str(artifacts.archive),
-                "archive_sha256": artifacts.archive_sha256,
-                "checksum_file": str(artifacts.checksum_file),
-                "code_signing": "NOT_SIGNED",
-            },
+            result,
             ensure_ascii=False,
             sort_keys=True,
             indent=2,

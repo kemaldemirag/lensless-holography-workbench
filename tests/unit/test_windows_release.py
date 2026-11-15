@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import io
 import json
 import platform
 import struct
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,6 +23,7 @@ from tools.windows_release import (
     ReleaseError,
     assemble_portable_release,
     build_application,
+    main as release_main,
     read_project_metadata,
     run_packaged_self_tests,
     sha256_file,
@@ -28,6 +31,7 @@ from tools.windows_release import (
     validate_release_member,
     validate_windows_x64_executable,
     verify_release_bundle,
+    verify_release_directory,
     windows_version_tuple,
     write_windows_version_file,
 )
@@ -275,6 +279,64 @@ class WindowsReleaseTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ReleaseError, "size mismatch|hash mismatch"):
             verify_release_bundle(release.directory)
+
+    def test_bundle_verification_streams_archive_content(self) -> None:
+        release = assemble_portable_release(
+            self.application,
+            self.base / "streaming-verifier",
+            self.metadata,
+        )
+
+        with patch.object(
+            Path,
+            "read_bytes",
+            side_effect=AssertionError("full-file reads are forbidden"),
+        ):
+            verified = verify_release_bundle(release.directory)
+
+        self.assertEqual(verified.archive_sha256, release.archive_sha256)
+
+    def test_verify_command_reports_integrity_and_claim_boundaries(self) -> None:
+        release = assemble_portable_release(
+            self.application,
+            self.base / "verify-command",
+            self.metadata,
+        )
+        output = io.StringIO()
+
+        with (
+            patch(
+                "tools.windows_release.verify_release_directory",
+                wraps=verify_release_directory,
+            ) as directory_verifier,
+            redirect_stdout(output),
+        ):
+            exit_code = release_main(
+                ["verify", "--release-dir", str(release.directory)]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(directory_verifier.call_count, 1)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["verification"], "OK")
+        self.assertEqual(result["archive_sha256"], release.archive_sha256)
+        self.assertEqual(result["claims"]["code_signing"], "NOT_SIGNED")
+        self.assertEqual(
+            result["claims"]["distribution_readiness"],
+            "INTERNAL_VALIDATION_ONLY",
+        )
+        self.assertEqual(
+            result["source_provenance"]["status"],
+            "NOT_ESTABLISHED",
+        )
+
+        release.checksum_file.write_text(
+            f"{'0' * 64}  {release.archive.name}\n",
+            encoding="ascii",
+            newline="\n",
+        )
+        with self.assertRaisesRegex(ReleaseError, "checksum does not match"):
+            release_main(["verify", "--release-dir", str(release.directory)])
 
     def test_verifier_rejects_false_distribution_claims(self) -> None:
         release = assemble_portable_release(
