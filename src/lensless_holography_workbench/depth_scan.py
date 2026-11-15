@@ -167,6 +167,7 @@ class PreparedWavefront:
     spectrum: np.ndarray
     kz_per_um: np.ndarray
     roi_bounds: tuple[int, int, int, int]
+    parameters: PropagationParameters
 
     @classmethod
     def from_normalized(
@@ -186,7 +187,7 @@ class PreparedWavefront:
         propagating = radicand >= 0
         kz = np.sqrt(np.maximum(radicand, 0.0))
         spectrum = np.where(propagating, np.fft.fft2(image), 0.0)
-        return cls(spectrum=spectrum, kz_per_um=kz, roi_bounds=bounds)
+        return cls(spectrum=spectrum, kz_per_um=kz, roi_bounds=bounds, parameters=parameters)
 
     @property
     def input_shape(self) -> tuple[int, int]:

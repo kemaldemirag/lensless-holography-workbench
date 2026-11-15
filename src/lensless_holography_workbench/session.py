@@ -124,6 +124,36 @@ def _validate_selected_depth(scan: DepthScanResult, selected_depth_um: float) ->
     return float(matches[0])
 
 
+def _validate_session_consistency(
+    prepared: PreparedWavefront,
+    scan: DepthScanResult,
+    parameters: PropagationParameters,
+) -> None:
+    parameters.validate()
+    if prepared.parameters != parameters:
+        raise ValueError("prepared wavefront parameters do not match session parameters")
+    if prepared.spectrum.ndim != 2 or prepared.kz_per_um.shape != prepared.spectrum.shape:
+        raise ValueError("prepared wavefront arrays are inconsistent")
+    if prepared.input_shape != scan.input_shape:
+        raise ValueError("scan input shape does not match the prepared wavefront")
+    if prepared.roi_bounds != scan.roi_bounds:
+        raise ValueError("scan ROI does not match the prepared wavefront")
+    top, left, bottom, right = prepared.roi_bounds
+    if (bottom - top, right - left) != (parameters.roi_size_px, parameters.roi_size_px):
+        raise ValueError("prepared ROI does not match roi_size_px")
+
+    expected_depths = parameters.depths_um()
+    actual_depths = np.asarray([metric.depth_um for metric in scan.metrics], dtype=np.float64)
+    if actual_depths.shape != expected_depths.shape or not np.array_equal(actual_depths, expected_depths):
+        raise ValueError("scan depth grid does not match session parameters")
+    metric_values = np.asarray(
+        [[metric.gradient_energy, metric.amplitude_std] for metric in scan.metrics],
+        dtype=np.float64,
+    )
+    if not np.isfinite(metric_values).all() or np.any(metric_values < 0):
+        raise ValueError("scan metrics must be finite and non-negative")
+
+
 def export_session(
     output_directory: str | Path,
     *,
@@ -137,8 +167,15 @@ def export_session(
 ) -> dict[str, Any]:
     """Write one immutable session directory and return its JSON payload."""
 
-    parameters.validate()
+    _validate_session_consistency(prepared, scan, parameters)
     selected_depth = _validate_selected_depth(scan, selected_depth_um)
+    input_records = _input_records(inputs)
+    selected_float64 = prepared.amplitude_at(selected_depth)
+    selected_float32 = np.asarray(selected_float64, dtype=np.float32)
+    comparison: ComparisonResult | None = None
+    if reference is not None:
+        comparison = compare_images(selected_float32, reference, line_row=comparison_line_row)
+
     output = Path(output_directory)
     managed_names = {
         "metrics.csv",
@@ -153,8 +190,6 @@ def export_session(
     output.mkdir(parents=True, exist_ok=True)
 
     metrics_path = write_metrics_csv(scan, output / "metrics.csv")
-    selected_float64 = prepared.amplitude_at(selected_depth)
-    selected_float32 = np.asarray(selected_float64, dtype=np.float32)
     selected_path = save_float_tiff(output / "selected-plane.tiff", selected_float32)
 
     outputs: dict[str, object] = {
@@ -162,8 +197,7 @@ def export_session(
         "selected_plane": _output_record(selected_path, selected_float32),
     }
     comparison_summary: dict[str, object] | None = None
-    if reference is not None:
-        comparison = compare_images(selected_float32, reference, line_row=comparison_line_row)
+    if comparison is not None:
         difference_float32 = np.asarray(comparison.difference, dtype=np.float32)
         difference_path = save_float_tiff(output / "difference-map.tiff", difference_float32)
         profile_path = output / "line-profile.csv"
@@ -187,7 +221,7 @@ def export_session(
         },
         "parameters": parameters.as_dict(),
         "selected_depth_um": selected_depth,
-        "inputs": _input_records(inputs),
+        "inputs": input_records,
         "scan": scan.as_summary(),
         "outputs": outputs,
         "comparison": comparison_summary,
@@ -212,15 +246,59 @@ def reopen_session(
 
     output = Path(output_directory)
     session = json.loads((output / "session.json").read_text(encoding="utf-8"))
-    if session.get("schema_version") != SESSION_SCHEMA_VERSION:
-        raise ValueError("unsupported session schema version")
+    expected_constants = {
+        "schema_version": SESSION_SCHEMA_VERSION,
+        "product_id": "U02",
+        "test_id": "U02-T2",
+        "status": U02_T2_STATUS,
+    }
+    for key, expected in expected_constants.items():
+        if session.get(key) != expected:
+            raise ValueError(f"invalid session {key}")
+    if not isinstance(session.get("outputs"), dict):
+        raise ValueError("session outputs must be an object")
+    for required_output in ("metrics", "selected_plane"):
+        if required_output not in session["outputs"]:
+            raise ValueError(f"missing session output: {required_output}")
+
     manifest = json.loads((output / "sha256.json").read_text(encoding="utf-8"))
     if manifest.get("algorithm") != "sha256" or not isinstance(manifest.get("files"), dict):
         raise ValueError("invalid hash manifest")
-    for name, expected in manifest["files"].items():
+    manifest_files: dict[str, str] = manifest["files"]
+    required_manifest_files = {"session.json"}
+    for output_name, record in session["outputs"].items():
+        if not isinstance(record, dict) or not isinstance(record.get("file"), str):
+            raise ValueError(f"invalid output record: {output_name}")
+        name = record["file"]
+        if name != Path(name).name:
+            raise ValueError(f"invalid output file name: {name}")
+        required_manifest_files.add(name)
+    if not required_manifest_files.issubset(manifest_files):
+        missing = sorted(required_manifest_files.difference(manifest_files))
+        raise ValueError(f"hash manifest is missing required files: {', '.join(missing)}")
+
+    if session.get("comparison") is None:
+        if "difference_map" in session["outputs"] or "line_profile" in session["outputs"]:
+            raise ValueError("comparison outputs exist without comparison metadata")
+    else:
+        for required_output in ("difference_map", "line_profile"):
+            if required_output not in session["outputs"]:
+                raise ValueError(f"missing comparison output: {required_output}")
+
+    for name, expected in manifest_files.items():
+        if name != Path(name).name or not isinstance(expected, str):
+            raise ValueError(f"invalid hash manifest entry: {name}")
         path = output / name
         if not path.is_file() or sha256_file(path) != expected:
             raise ValueError(f"hash verification failed: {name}")
+
+    for output_name, record in session["outputs"].items():
+        name = record["file"]
+        path = output / name
+        if record.get("sha256") != manifest_files[name]:
+            raise ValueError(f"output hash is not covered by manifest: {output_name}")
+        if record.get("size_bytes") != path.stat().st_size:
+            raise ValueError(f"output size does not match session: {output_name}")
 
     selected_record = session["outputs"]["selected_plane"]
     selected_path = output / selected_record["file"]

@@ -136,6 +136,60 @@ class SessionTests(unittest.TestCase):
                     inputs=inputs,
                 )
 
+    def test_reopen_rejects_missing_output_manifest_coverage(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            session_dir = base / "session"
+            export_session(
+                session_dir,
+                prepared=self.prepared,
+                scan=self.scan,
+                parameters=self.parameters,
+                selected_depth_um=1.0,
+                inputs=self._inputs(base),
+            )
+            manifest_path = session_dir / "sha256.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            del manifest["files"]["selected-plane.tiff"]
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            with self.assertRaisesRegex(ValueError, "missing required files"):
+                reopen_session(session_dir)
+
+    def test_reopen_rejects_tampered_session_constants_even_when_rehashed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            session_dir = base / "session"
+            export_session(
+                session_dir,
+                prepared=self.prepared,
+                scan=self.scan,
+                parameters=self.parameters,
+                selected_depth_um=1.0,
+                inputs=self._inputs(base),
+            )
+            session_path = session_dir / "session.json"
+            session = json.loads(session_path.read_text(encoding="utf-8"))
+            session["status"] = "TEKRARLANDI"
+            session_path.write_text(
+                json.dumps(session, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            manifest_path = session_dir / "sha256.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["files"]["session.json"] = sha256_file(session_path)
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            with self.assertRaisesRegex(ValueError, "invalid session status"):
+                reopen_session(session_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

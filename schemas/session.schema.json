@@ -22,7 +22,7 @@
     "schema_version": { "const": "1.0" },
     "product_id": { "const": "U02" },
     "test_id": { "const": "U02-T2" },
-    "status": { "enum": ["BEKLİYOR", "TEKRARLANDI", "SAHA VERİSİ GEREKİR"] },
+    "status": { "const": "BEKLİYOR" },
     "status_reason": { "type": "string", "minLength": 1 },
     "environment": {
       "type": "object",
