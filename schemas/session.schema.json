@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lensless holography workbench session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "product_id",
+    "test_id",
+    "status",
+    "status_reason",
+    "parameters",
+    "selected_depth_um",
+    "inputs",
+    "scan",
+    "outputs",
+    "comparison"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "product_id": { "const": "U02" },
+    "test_id": { "const": "U02-T2" },
+    "status": { "enum": ["BEKLİYOR", "TEKRARLANDI", "SAHA VERİSİ GEREKİR"] },
+    "status_reason": { "type": "string", "minLength": 1 },
+    "parameters": {
+      "type": "object",
+      "required": [
+        "pixel_pitch_um",
+        "wavelength_um",
+        "refractive_index",
+        "depth_start_um",
+        "depth_stop_um",
+        "depth_step_um",
+        "roi_size_px"
+      ]
+    },
+    "selected_depth_um": { "type": "number" },
+    "inputs": { "type": "array" },
+    "scan": { "type": "object" },
+    "outputs": { "type": "object" },
+    "comparison": { "type": ["object", "null"] }
+  }
+}
+

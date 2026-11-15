@@ -1,0 +1,10 @@
+{
+  "depth_start_um": 0.0,
+  "depth_step_um": 1.0,
+  "depth_stop_um": 20.0,
+  "pixel_pitch_um": 0.0851,
+  "refractive_index": 1.33,
+  "roi_size_px": 256,
+  "wavelength_um": 0.66
+}
+

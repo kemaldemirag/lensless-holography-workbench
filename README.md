@@ -21,3 +21,27 @@ Run tests with the workspace Python runtime and `PYTHONPATH=src`:
 python -m unittest discover -s tests -t . -v
 ```
 
+## File-based session
+
+The CLI accepts one hologram and one or more background frames. Defaults are
+the U02-T1 numerical-repeat parameters: 0.0851 µm pixel pitch, 0.66 µm vacuum
+wavelength, refractive index 1.33, a 0–20 µm inclusive scan in 1 µm steps, and
+a centred 256 × 256 pixel measurement region.
+
+```text
+holography-workbench \
+  --signal image01.jpg \
+  --background bg01.jpg \
+  --background bg02.jpg \
+  --background bg03.jpg \
+  --output artifacts/u02-session
+```
+
+The session contains stable CSV/JSON, a float32 TIFF that reopens to the same
+pixel array, and SHA-256 hashes. An optional pre-aligned float TIFF reference
+can produce a difference map and centre-line profile. The comparison still
+reports `NOT_EVALUATED`: no similarity threshold is embedded in the code.
+
+See [acceptance status](docs/acceptance.md) for the boundary between numerical
+reproduction and physical or customer acceptance.
+
