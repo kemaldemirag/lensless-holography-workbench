@@ -190,6 +190,40 @@ class SessionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid session status"):
                 reopen_session(session_dir)
 
+    def test_reopen_rejects_rehashed_comparison_pass(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            session_dir = base / "session"
+            reference = np.asarray(self.prepared.amplitude_at(1.0), dtype=np.float32)
+            export_session(
+                session_dir,
+                prepared=self.prepared,
+                scan=self.scan,
+                parameters=self.parameters,
+                selected_depth_um=1.0,
+                inputs=self._inputs(base),
+                reference=reference,
+            )
+            session_path = session_dir / "session.json"
+            session = json.loads(session_path.read_text(encoding="utf-8"))
+            session["comparison"]["acceptance_result"] = "PASS"
+            session["comparison"]["acceptance_threshold"] = 0.5
+            session_path.write_text(
+                json.dumps(session, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            manifest_path = session_dir / "sha256.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["files"]["session.json"] = sha256_file(session_path)
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            with self.assertRaisesRegex(ValueError, "must remain NOT_EVALUATED"):
+                reopen_session(session_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

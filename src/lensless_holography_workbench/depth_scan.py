@@ -8,6 +8,8 @@ descriptors; they do not establish a physical-focus acceptance result.
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -89,6 +91,7 @@ class DepthScanResult:
     metrics: tuple[DepthMetric, ...]
     input_shape: tuple[int, int]
     roi_bounds: tuple[int, int, int, int]
+    source_fingerprint: str
 
     def __post_init__(self) -> None:
         if not self.metrics:
@@ -116,6 +119,7 @@ class DepthScanResult:
                 "shape": [bottom - top, right - left],
             },
             "planes": len(self.metrics),
+            "source_fingerprint_sha256": self.source_fingerprint,
         }
 
 
@@ -160,6 +164,24 @@ def _center_bounds(shape: tuple[int, int], size: int) -> tuple[int, int, int, in
     return top, left, top + size, left + size
 
 
+def _source_fingerprint(normalized: np.ndarray, parameters: PropagationParameters) -> str:
+    canonical = np.ascontiguousarray(normalized, dtype="<f8")
+    parameter_bytes = json.dumps(
+        parameters.as_dict(),
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    digest = hashlib.sha256()
+    digest.update(b"lensless-holography-wavefront-v1\0")
+    digest.update(parameter_bytes)
+    digest.update(b"\0")
+    digest.update(json.dumps(list(canonical.shape), separators=(",", ":")).encode("ascii"))
+    digest.update(b"\0")
+    digest.update(canonical.tobytes(order="C"))
+    return digest.hexdigest()
+
+
 @dataclass(slots=True)
 class PreparedWavefront:
     """Precomputed spectrum and propagation wave numbers for one hologram."""
@@ -168,6 +190,7 @@ class PreparedWavefront:
     kz_per_um: np.ndarray
     roi_bounds: tuple[int, int, int, int]
     parameters: PropagationParameters
+    source_fingerprint: str
 
     @classmethod
     def from_normalized(
@@ -187,7 +210,13 @@ class PreparedWavefront:
         propagating = radicand >= 0
         kz = np.sqrt(np.maximum(radicand, 0.0))
         spectrum = np.where(propagating, np.fft.fft2(image), 0.0)
-        return cls(spectrum=spectrum, kz_per_um=kz, roi_bounds=bounds, parameters=parameters)
+        return cls(
+            spectrum=spectrum,
+            kz_per_um=kz,
+            roi_bounds=bounds,
+            parameters=parameters,
+            source_fingerprint=_source_fingerprint(image, parameters),
+        )
 
     @property
     def input_shape(self) -> tuple[int, int]:
@@ -221,7 +250,12 @@ def scan_depths(
     if not np.isfinite(depths).all():
         raise ValueError("all depths must be finite")
     metrics = tuple(_measure(depth, prepared.amplitude_at(depth)) for depth in depths)
-    return DepthScanResult(metrics=metrics, input_shape=prepared.input_shape, roi_bounds=prepared.roi_bounds)
+    return DepthScanResult(
+        metrics=metrics,
+        input_shape=prepared.input_shape,
+        roi_bounds=prepared.roi_bounds,
+        source_fingerprint=prepared.source_fingerprint,
+    )
 
 
 def evaluate_depth_scan(

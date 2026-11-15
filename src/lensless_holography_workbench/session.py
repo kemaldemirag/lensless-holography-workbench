@@ -132,6 +132,8 @@ def _validate_session_consistency(
     parameters.validate()
     if prepared.parameters != parameters:
         raise ValueError("prepared wavefront parameters do not match session parameters")
+    if scan.source_fingerprint != prepared.source_fingerprint:
+        raise ValueError("scan source fingerprint does not match the prepared wavefront")
     if prepared.spectrum.ndim != 2 or prepared.kz_per_um.shape != prepared.spectrum.shape:
         raise ValueError("prepared wavefront arrays are inconsistent")
     if prepared.input_shape != scan.input_shape:
@@ -277,10 +279,17 @@ def reopen_session(
         missing = sorted(required_manifest_files.difference(manifest_files))
         raise ValueError(f"hash manifest is missing required files: {', '.join(missing)}")
 
-    if session.get("comparison") is None:
+    comparison_metadata = session.get("comparison")
+    if comparison_metadata is None:
         if "difference_map" in session["outputs"] or "line_profile" in session["outputs"]:
             raise ValueError("comparison outputs exist without comparison metadata")
     else:
+        if not isinstance(comparison_metadata, dict):
+            raise ValueError("comparison metadata must be an object or null")
+        if comparison_metadata.get("acceptance_result") != "NOT_EVALUATED":
+            raise ValueError("comparison acceptance result must remain NOT_EVALUATED")
+        if comparison_metadata.get("acceptance_threshold") is not None:
+            raise ValueError("comparison acceptance threshold must remain null")
         for required_output in ("difference_map", "line_profile"):
             if required_output not in session["outputs"]:
                 raise ValueError(f"missing comparison output: {required_output}")

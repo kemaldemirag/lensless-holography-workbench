@@ -48,7 +48,19 @@
     "inputs": { "type": "array" },
     "scan": { "type": "object" },
     "outputs": { "type": "object" },
-    "comparison": { "type": ["object", "null"] }
+    "comparison": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["acceptance_threshold", "acceptance_result"],
+          "properties": {
+            "acceptance_threshold": { "type": "null" },
+            "acceptance_result": { "const": "NOT_EVALUATED" }
+          }
+        }
+      ]
+    }
   }
 }
 
