@@ -53,7 +53,7 @@ class SessionTests(unittest.TestCase):
             session, reopened = reopen_session(session_dir, expected_selected_plane=expected)
 
         np.testing.assert_array_equal(reopened, expected)
-        self.assertEqual(session["status"], "BEKLIYOR")
+        self.assertEqual(session["status"], "BEKLİYOR")
         self.assertEqual(session["schema_version"], "1.0")
         self.assertEqual(session["environment"]["numpy"], np.__version__)
         self.assertEqual(session["units"]["depth"], "um")

@@ -17,7 +17,7 @@ from .comparison import ComparisonResult, compare_images
 from .depth_scan import DepthScanResult, PreparedWavefront, PropagationParameters, write_metrics_csv
 
 SESSION_SCHEMA_VERSION = "1.0"
-U02_T2_STATUS = "BEKLIYOR"
+U02_T2_STATUS = "BEKLİYOR"
 U02_T2_STATUS_REASON = (
     "Published-reference alignment and the image-similarity threshold must be fixed before comparison."
 )

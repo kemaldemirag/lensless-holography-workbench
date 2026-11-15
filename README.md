@@ -6,7 +6,7 @@ angular-spectrum depth scan. The Windows user interface and physical-focus
 acceptance remain outside this slice.
 
 The core records numerical metrics without claiming that the largest focus
-metric is the physical focus. U02-T2 remains `BEKLIYOR` until a comparison
+metric is the physical focus. U02-T2 remains `BEKLİYOR` until a comparison
 threshold is defined before evaluating a published reference pair.
 
 ## Development environment

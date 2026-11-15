@@ -16,7 +16,7 @@ contains the hash-verified K03 source package.
 
 ## U02-T2 Windows comparison and session
 
-Status: `BEKLIYOR`
+Status: `BEKLİYOR`
 
 The headless core can save a selected plane as a float32 TIFF, reopen the same
 pixel array, record a versioned session, verify output hashes, and calculate a
