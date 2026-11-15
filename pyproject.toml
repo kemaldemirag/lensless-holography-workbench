@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lensless-holography-workbench"
 version = "0.1.0"
-description = "Deterministic headless core for lensless hologram depth scans"
+description = "Deterministic lensless hologram depth scans with a Windows desktop shell"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,6 +15,9 @@ dependencies = [
 
 [project.scripts]
 holography-workbench = "lensless_holography_workbench.cli:main"
+
+[project.gui-scripts]
+holography-workbench-gui = "lensless_holography_workbench.windows_app:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
