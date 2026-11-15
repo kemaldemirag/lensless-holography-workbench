@@ -13,9 +13,10 @@ holography-workbench-gui
 1. Select one signal image.
 2. Select one or more background images. Signal, backgrounds, and reference
    must all be different files.
-3. Optionally select an already aligned float TIFF reference. Its dimensions
-   must match the reconstructed measurement region and all values must be
-   finite.
+3. Optionally select an already aligned 32-bit floating-point TIFF reference.
+   Its dimensions must match the reconstructed measurement region and all
+   values must be finite. Integer TIFF references are rejected rather than
+   silently rescaled.
 4. Enter pixel pitch, vacuum wavelength, refractive index, inclusive depth
    start/stop/step, and the centred square ROI size.
 5. Start the scan. Computation runs off the Tk event loop; progress and

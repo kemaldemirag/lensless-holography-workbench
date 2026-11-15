@@ -56,10 +56,11 @@ holography-workbench-gui
 ```
 
 Select one signal image, at least one background image, and optionally an
-already aligned float TIFF reference. Enter the optical and depth-scan
-parameters, run the scan, inspect any cached depth plane, and export to a new
-session directory. An existing session can be opened only after its manifest,
-hashes, metadata, array shapes, and comparison semantics pass verification.
+already aligned 32-bit floating-point TIFF reference. Enter the optical and
+depth-scan parameters, run the scan, inspect any cached depth plane, and export
+to a new session directory. An existing session can be opened only after its
+manifest, hashes, metadata, array shapes, and comparison semantics pass
+verification.
 
 The displayed numerical peak is a navigation aid: **sayısal tepe fiziksel
 odak değildir**. The desktop shell preserves U02-T2 as `BEKLİYOR` and any
