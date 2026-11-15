@@ -207,6 +207,11 @@ class WindowsReleaseTests(unittest.TestCase):
             "NOT_ESTABLISHED",
         )
         self.assertEqual(
+            manifest["build_environment"]["source_provenance"],
+            "NOT_ESTABLISHED",
+        )
+        self.assertIsNone(manifest["build_environment"]["git_head"])
+        self.assertEqual(
             [row["path"] for row in manifest["files"]],
             [
                 "app/LenslessHolographyWorkbench.exe",

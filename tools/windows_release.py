@@ -365,6 +365,7 @@ def create_release_manifest(
     app_directory: str | Path,
     metadata: ProjectMetadata,
     runtime_validation: object,
+    source_repository: str | Path | None = None,
 ) -> dict[str, object]:
     root = Path(app_directory)
     validate_windows_x64_executable(root)
@@ -379,7 +380,11 @@ def create_release_manifest(
                 "sha256": sha256_file(path),
             }
         )
-    git_head, git_clean = _git_build_state(repository_root())
+    git_head, git_clean = (
+        _git_build_state(Path(source_repository).resolve())
+        if source_repository is not None
+        else (None, None)
+    )
     return {
         "schema_version": "1.0",
         "product_id": PRODUCT_ID,
@@ -405,6 +410,11 @@ def create_release_manifest(
             "zlib": zlib.ZLIB_VERSION,
             "git_head": git_head,
             "git_worktree_clean": git_clean,
+            "source_provenance": (
+                "RECORDED_GIT_WORKTREE"
+                if git_head is not None
+                else "NOT_ESTABLISHED"
+            ),
             "archive_determinism": "FIXED_METADATA_FOR_IDENTICAL_FILE_TREE",
             "binary_reproducibility": "NOT_ESTABLISHED",
         },
@@ -565,6 +575,22 @@ def verify_release_directory(
         or build_environment.get("binary_reproducibility") != "NOT_ESTABLISHED"
     ):
         raise ReleaseError("release reproducibility claims are invalid")
+    provenance = build_environment.get("source_provenance")
+    git_head = build_environment.get("git_head")
+    git_clean = build_environment.get("git_worktree_clean")
+    if provenance == "RECORDED_GIT_WORKTREE":
+        if (
+            not isinstance(git_head, str)
+            or len(git_head) != 40
+            or any(character not in "0123456789abcdef" for character in git_head)
+            or not isinstance(git_clean, bool)
+        ):
+            raise ReleaseError("recorded Git source provenance is invalid")
+    elif provenance == "NOT_ESTABLISHED":
+        if git_head is not None or git_clean is not None:
+            raise ReleaseError("unestablished source provenance must not claim Git state")
+    else:
+        raise ReleaseError("release source provenance status is invalid")
     runtime_validation = validate_packaged_self_test_results(
         manifest.get("packaged_runtime_validation")
     )
@@ -704,6 +730,8 @@ def assemble_portable_release(
     app_directory: str | Path,
     output_directory: str | Path,
     metadata: ProjectMetadata,
+    *,
+    source_repository: str | Path | None = None,
 ) -> ReleaseArtifacts:
     source = Path(app_directory).resolve()
     _relative_files(source)
@@ -735,6 +763,7 @@ def assemble_portable_release(
             staged_release / "app",
             metadata,
             runtime_validation,
+            source_repository,
         )
         _write_json(staged_release / MANIFEST_NAME, manifest)
         verify_release_directory(staged_release)
@@ -930,7 +959,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         metadata = read_project_metadata(root / "pyproject.toml")
         application = build_application(root)
         output = args.output_dir or root / "dist" / "releases"
-        artifacts = assemble_portable_release(application, output, metadata)
+        artifacts = assemble_portable_release(
+            application,
+            output,
+            metadata,
+            source_repository=root,
+        )
     print(
         json.dumps(
             {
