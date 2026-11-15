@@ -1,9 +1,10 @@
 # Lensless Holography Workbench
 
-This repository contains the headless processing core for product U02 in the
-15 November 2026 model reports. The first slice reproduces a deterministic
-angular-spectrum depth scan. The Windows user interface and physical-focus
-acceptance remain outside this slice.
+This repository contains the deterministic processing core and the first
+Windows desktop shell for product U02 in the 15 November 2026 model reports.
+It reproduces an angular-spectrum depth scan, keeps every reconstructed plane
+available for inspection, and exports a hash-verified file-based session.
+Physical-focus acceptance remains outside this slice.
 
 The core records numerical metrics without claiming that the largest focus
 metric is the physical focus. U02-T2 remains `BEKLİYOR` until a comparison
@@ -44,4 +45,26 @@ reports `NOT_EVALUATED`: no similarity threshold is embedded in the code.
 
 See [acceptance status](docs/acceptance.md) for the boundary between numerical
 reproduction and physical or customer acceptance.
+
+## Windows desktop workflow
+
+After installing the project in the active Python environment, start the
+desktop shell with:
+
+```text
+holography-workbench-gui
+```
+
+Select one signal image, at least one background image, and optionally an
+already aligned float TIFF reference. Enter the optical and depth-scan
+parameters, run the scan, inspect any cached depth plane, and export to a new
+session directory. An existing session can be opened only after its manifest,
+hashes, metadata, array shapes, and comparison semantics pass verification.
+
+The displayed numerical peak is a navigation aid: **sayısal tepe fiziksel
+odak değildir**. The desktop shell preserves U02-T2 as `BEKLİYOR` and any
+reference comparison as `NOT_EVALUATED`; it cannot produce PASS or FAIL.
+
+See [Windows workflow](docs/windows-workflow.md) for the operational sequence,
+input constraints, and current packaging boundary.
 

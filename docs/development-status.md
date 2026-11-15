@@ -12,16 +12,20 @@
 - SHA-256 binding between the normalized source wavefront and its scan metrics;
 - exact TIFF pixel-array verification on reopen;
 - aligned-image difference maps and centre-line profiles;
+- a Tkinter Windows desktop shell with asynchronous scan progress,
+  cancellation, cached-plane navigation, verified session export, and
+  inspection-only session reopen;
 - unit, negative, and K03 real-data reproducibility tests.
 
 ## Not implemented
 
-- Windows desktop user interface;
+- signed/standalone Windows packaging and installer;
 - published UNAL reference-pair alignment;
 - customer-approved similarity threshold;
 - physical-focus calibration;
 - Raspberry Pi RAW acquisition and metadata binding.
 
-No remote repository is configured. Commits remain local until a GitHub
-repository is explicitly mapped to this product.
+The desktop entry point is intended for an installed Python environment. A
+standalone executable, code signing, installer, and installer-level Windows
+validation are not part of the current slice.
 

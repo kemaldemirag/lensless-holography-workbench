@@ -18,15 +18,16 @@ contains the hash-verified K03 source package.
 
 Status: `BEKLİYOR`
 
-The headless core can save a selected plane as a float32 TIFF, reopen the same
-pixel array, record a versioned session, verify output hashes, and calculate a
-difference map and centre-line profile for aligned images. It deliberately
-does not emit PASS or FAIL. The following acceptance inputs are still open:
+The core and Windows desktop shell can save a selected plane as a float32
+TIFF, reopen the same pixel array, record a versioned session, verify output
+hashes, and calculate a difference map and centre-line profile for aligned
+images. They deliberately do not emit PASS or FAIL. The following acceptance
+inputs are still open:
 
 - the published reference pair and exact geometry;
 - the common crop and intensity scaling rule;
 - a similarity threshold fixed before comparison;
-- a Windows build and user-interface workflow.
+- a signed, standalone Windows build and installer validation.
 
 ## U02-T3 Raspberry Pi acquisition
 
