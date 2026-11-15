@@ -70,13 +70,34 @@ def _freeze(value: Any) -> Any:
     return value
 
 
-def _strict_directory_files(directory: Path) -> None:
+def _strict_directory_files(
+    directory: Path,
+    session: Mapping[str, Any],
+) -> None:
     manifest_path = directory / "sha256.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     names = manifest.get("files")
     if not isinstance(names, dict):
         raise ValueError("invalid hash manifest")
-    expected = set(names) | {"sha256.json"}
+    outputs = session.get("outputs")
+    if not isinstance(outputs, Mapping):
+        raise ValueError("session outputs must be an object")
+    declared = {"session.json"}
+    for label, record in outputs.items():
+        if not isinstance(record, Mapping) or not isinstance(record.get("file"), str):
+            raise ValueError(f"invalid session output record: {label}")
+        declared.add(record["file"])
+    manifest_names = set(names)
+    if manifest_names != declared:
+        unexpected = sorted(manifest_names - declared)
+        missing = sorted(declared - manifest_names)
+        details: list[str] = []
+        if unexpected:
+            details.append(f"not declared by session: {', '.join(unexpected)}")
+        if missing:
+            details.append(f"missing from manifest: {', '.join(missing)}")
+        raise ValueError(f"hash manifest does not match session outputs ({'; '.join(details)})")
+    expected = declared | {"sha256.json"}
     entries = tuple(directory.iterdir())
     if any(not entry.is_file() for entry in entries):
         raise ValueError("session directory must contain files only")
@@ -204,7 +225,7 @@ def open_session_for_inspection(output_directory: str | Path) -> OpenedSession:
 
     directory = Path(output_directory)
     session, selected_plane = reopen_session(directory)
-    _strict_directory_files(directory)
+    _strict_directory_files(directory, session)
     metrics = _read_metrics(directory, session)
 
     selected_record = session["outputs"]["selected_plane"]

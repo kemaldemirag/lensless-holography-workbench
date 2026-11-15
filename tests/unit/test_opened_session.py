@@ -120,6 +120,23 @@ class OpenedSessionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unexpected: untracked.bin"):
                 open_session_for_inspection(session_dir)
 
+    def test_rejects_manifest_file_not_declared_by_session(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            session_dir = self._export(Path(temporary))
+            extra = session_dir / "extra.bin"
+            extra.write_bytes(b"hash covered but not a session output")
+            manifest_path = session_dir / "sha256.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["files"]["extra.bin"] = sha256_file(extra)
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            with self.assertRaisesRegex(ValueError, "not declared by session: extra.bin"):
+                open_session_for_inspection(session_dir)
+
     def test_rejects_rehashed_metrics_with_wrong_depth_grid(self) -> None:
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
             session_dir = self._export(Path(temporary))
