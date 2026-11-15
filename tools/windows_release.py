@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 import zipfile
 import zlib
@@ -438,6 +439,19 @@ def _write_json(path: Path, payload: object) -> None:
     )
 
 
+def _replace_directory_atomic(source: Path, destination: Path) -> None:
+    """Atomically publish a directory, retrying only transient Windows locks."""
+
+    for attempt in range(5):
+        try:
+            source.replace(destination)
+            return
+        except PermissionError:
+            if destination.exists() or attempt == 4:
+                raise
+            time.sleep(0.1 * (attempt + 1))
+
+
 def _write_deterministic_zip(
     source: Path,
     destination: Path,
@@ -694,6 +708,8 @@ def assemble_portable_release(
     source = Path(app_directory).resolve()
     _relative_files(source)
     output = Path(output_directory).resolve()
+    if output == source or source in output.parents:
+        raise ReleaseError("release output must not be inside the application tree")
     release_name = f"{metadata.name}-{metadata.version}-windows-x64"
     release_directory = output / release_name
     archive_name = f"{release_name}.zip"
@@ -711,6 +727,7 @@ def assemble_portable_release(
     os.close(archive_descriptor)
     staged_archive = Path(archive_temporary_name)
     staged_archive.unlink()
+    published = False
     try:
         shutil.copytree(source, staged_release / "app", symlinks=True)
         runtime_validation = run_packaged_self_tests(staged_release / "app")
@@ -738,15 +755,16 @@ def assemble_portable_release(
             newline="\n",
         )
         staged_archive.replace(staged_release / archive_name)
-        staged_release.replace(release_directory)
+        _replace_directory_atomic(staged_release, release_directory)
+        published = True
         verified = verify_release_bundle(release_directory)
         if verified.archive_sha256 != archive_hash:
             raise ReleaseError("published archive hash changed after atomic publish")
         return verified
     except BaseException:
-        if release_directory.is_dir():
+        if published and release_directory.is_dir():
             shutil.rmtree(release_directory, ignore_errors=True)
-        elif release_directory.exists():
+        elif published and release_directory.exists():
             release_directory.unlink(missing_ok=True)
         raise
     finally:
@@ -863,7 +881,7 @@ def build_application(repo: str | Path) -> Path:
                 symlinks=True,
             )
             _relative_files(staged_application)
-            staged_application.replace(destination)
+            _replace_directory_atomic(staged_application, destination)
         finally:
             shutil.rmtree(staging_parent, ignore_errors=True)
 

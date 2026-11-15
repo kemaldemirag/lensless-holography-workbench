@@ -327,6 +327,42 @@ class WindowsReleaseTests(unittest.TestCase):
                 self.metadata,
             )
 
+        with self.assertRaisesRegex(ReleaseError, "inside the application tree"):
+            assemble_portable_release(
+                self.application,
+                self.application / "recursive-output",
+                self.metadata,
+            )
+
+    def test_publish_race_does_not_delete_competing_destination(self) -> None:
+        output = self.base / "race-output"
+        release_name = (
+            "lensless-holography-workbench-0.3.0-windows-x64"
+        )
+        destination = output / release_name
+
+        def collide(_source: Path, target: Path) -> None:
+            self.assertEqual(target, destination)
+            target.mkdir(parents=True)
+            (target / "competitor.txt").write_text("keep", encoding="utf-8")
+            raise FileExistsError("simulated publisher race")
+
+        with patch(
+            "tools.windows_release._replace_directory_atomic",
+            side_effect=collide,
+        ):
+            with self.assertRaisesRegex(FileExistsError, "publisher race"):
+                assemble_portable_release(
+                    self.application,
+                    output,
+                    self.metadata,
+                )
+
+        self.assertEqual(
+            (destination / "competitor.txt").read_text(encoding="utf-8"),
+            "keep",
+        )
+
     def test_build_fails_closed_when_pyinstaller_is_missing(self) -> None:
         with patch(
             "tools.windows_release.pyinstaller_is_available",
