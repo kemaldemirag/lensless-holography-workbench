@@ -6,16 +6,9 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
-from PIL import Image
-
 from .depth_scan import PropagationParameters, evaluate_depth_scan
+from .image_io import load_grayscale_image
 from .session import export_session, load_float_tiff
-
-
-def _load_grayscale(path: Path) -> np.ndarray:
-    with Image.open(path) as image:
-        return np.asarray(image.convert("L"), dtype=np.float64)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,8 +39,8 @@ def main(argv: list[str] | None = None) -> int:
         depth_step_um=args.depth_step_um,
         roi_size_px=args.roi_size_px,
     )
-    signal = _load_grayscale(args.signal)
-    backgrounds = [_load_grayscale(path) for path in args.background]
+    signal = load_grayscale_image(args.signal)
+    backgrounds = [load_grayscale_image(path) for path in args.background]
     prepared, scan = evaluate_depth_scan(signal, backgrounds, parameters)
     inputs: dict[str, Path] = {"signal": args.signal}
     inputs.update({f"background_{index}": path for index, path in enumerate(args.background, start=1)})

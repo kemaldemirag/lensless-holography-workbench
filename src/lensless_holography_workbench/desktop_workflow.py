@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
-from PIL import Image
 
 from .depth_scan import (
     DepthMetric,
@@ -33,6 +32,7 @@ from .session import (
     load_float_tiff,
     sha256_file,
 )
+from .image_io import load_grayscale_image
 from .opened_session import OpenedSession, open_session_for_inspection
 
 ProgressCallback = Callable[[int, int], None]
@@ -134,14 +134,6 @@ class PlanePreview:
     metric: DepthMetric | None
     acceptance_status: str = U02_T2_STATUS
     comparison_result: str = COMPARISON_RESULT
-
-
-def _load_grayscale(path: Path) -> np.ndarray:
-    with Image.open(path) as image:
-        # Pillow's ``L`` conversion quantizes every source to 8 bit.  ``F``
-        # preserves integer/float TIFF dynamic range while still converting
-        # colour inputs to one luminance plane.
-        return np.asarray(image.convert("F"), dtype=np.float64)
 
 
 def _input_hashes(inputs: InputSelection) -> tuple[tuple[str, str], ...]:
@@ -371,9 +363,9 @@ class DesktopWorkflow:
             if request.cancel_event.is_set():
                 return False
 
-            signal = _load_grayscale(request.inputs.signal)
+            signal = load_grayscale_image(request.inputs.signal)
             backgrounds = [
-                _load_grayscale(path) for path in request.inputs.backgrounds
+                load_grayscale_image(path) for path in request.inputs.backgrounds
             ]
             reference = (
                 load_float_tiff(request.inputs.reference_tiff)
