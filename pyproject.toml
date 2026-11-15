@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lensless-holography-workbench"
+version = "0.1.0"
+description = "Deterministic headless core for lensless hologram depth scans"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=2.3,<3",
+  "Pillow>=13,<14",
+]
+
+[project.scripts]
+holography-workbench = "lensless_holography_workbench.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
