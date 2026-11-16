@@ -1,0 +1,377 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "License-gated external UNAL K18 fixture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fixture_id",
+    "product_id",
+    "test_id",
+    "permission",
+    "fixture",
+    "acceptance"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "fixture_id": { "const": "UNAL-K18-SINGLE-MICROORGANISM" },
+    "product_id": { "const": "U02" },
+    "test_id": { "const": "U02-T2" },
+    "permission": {
+      "oneOf": [
+        { "$ref": "#/$defs/notGrantedPermission" },
+        { "$ref": "#/$defs/grantedPermission" }
+      ]
+    },
+    "fixture": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/fixture" }
+      ]
+    },
+    "acceptance": { "$ref": "#/$defs/acceptance" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "permission": {
+            "properties": { "status": { "const": "NOT_GRANTED" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": { "properties": { "fixture": { "type": "null" } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "permission": {
+            "properties": { "status": { "const": "GRANTED" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": { "properties": { "fixture": { "$ref": "#/$defs/fixture" } } }
+    }
+  ],
+  "$defs": {
+    "notGrantedPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": { "const": "NOT_GRANTED" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "grantedPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "usage",
+        "redistribution",
+        "granted_by",
+        "granted_on",
+        "evidence_reference"
+      ],
+      "properties": {
+        "status": { "const": "GRANTED" },
+        "usage": { "const": "LOCAL_U02_T2_VALIDATION_ONLY" },
+        "redistribution": { "const": "PROHIBITED" },
+        "granted_by": { "type": "string", "minLength": 1 },
+        "granted_on": { "type": "string", "format": "date" },
+        "evidence_reference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "assets",
+        "parameter_verification",
+        "optics",
+        "shared_crop_px",
+        "intensity_mapping"
+      ],
+      "properties": {
+        "source": { "$ref": "#/$defs/source" },
+        "assets": { "$ref": "#/$defs/assets" },
+        "parameter_verification": { "$ref": "#/$defs/parameterVerification" },
+        "optics": { "$ref": "#/$defs/optics" },
+        "shared_crop_px": { "$ref": "#/$defs/sharedCrop" },
+        "intensity_mapping": { "$ref": "#/$defs/intensityMapping" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "code_commit_sha1",
+        "documentation_commit_sha1",
+        "project_page_url"
+      ],
+      "properties": {
+        "repository": { "const": "unal-optodigital/DLHM" },
+        "code_commit_sha1": {
+          "const": "5d5273e2ebb08735c531815d3e4b100a4e3f3772"
+        },
+        "documentation_commit_sha1": {
+          "const": "536e70f1e179bf285492343b989a478d093c32e3"
+        },
+        "project_page_url": {
+          "const": "https://unal-optodigital.github.io/DLHM/"
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/hologramAsset" },
+          { "$ref": "#/$defs/referenceAsset" },
+          { "$ref": "#/$defs/parameterScreenshotAsset" },
+          { "$ref": "#/$defs/publishedIntensityAsset" }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "role": { "const": "hologram" } },
+            "required": ["role"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "role": { "const": "reference" } },
+            "required": ["role"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "role": { "const": "parameter_screenshot" } },
+            "required": ["role"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "role": { "const": "published_intensity_visual" } },
+            "required": ["role"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
+    "assetBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "path",
+        "source_name",
+        "source_url",
+        "git_blob_sha1",
+        "sha256",
+        "size_bytes",
+        "accessed_on"
+      ],
+      "properties": {
+        "role": { "type": "string" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$)).+$",
+          "description": "Canonical POSIX-relative path. The loader applies stricter Windows-safe path checks."
+        },
+        "source_name": { "type": "string", "minLength": 1 },
+        "source_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "git_blob_sha1": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "accessed_on": { "type": "string", "format": "date" }
+      }
+    },
+    "hologramAsset": {
+      "allOf": [
+        { "$ref": "#/$defs/assetBase" },
+        {
+          "properties": {
+            "role": { "const": "hologram" },
+            "source_name": { "const": "c0025.jpg" },
+            "git_blob_sha1": {
+              "const": "f4218e67ca133e28ab2c2e66e46d9399ad153031"
+            }
+          }
+        }
+      ]
+    },
+    "referenceAsset": {
+      "allOf": [
+        { "$ref": "#/$defs/assetBase" },
+        {
+          "properties": {
+            "role": { "const": "reference" },
+            "source_name": { "const": "c0039.jpg" },
+            "git_blob_sha1": {
+              "const": "98510a0d67853ef87e68a8115eee67be754e69f6"
+            }
+          }
+        }
+      ]
+    },
+    "parameterScreenshotAsset": {
+      "allOf": [
+        { "$ref": "#/$defs/assetBase" },
+        {
+          "properties": {
+            "role": { "const": "parameter_screenshot" },
+            "source_name": {
+              "const": "OneMicrorganism_ReconstructionParameters.jpg"
+            },
+            "git_blob_sha1": {
+              "const": "dd537fde038a78e924b3f1dfb855021d977c89fc"
+            }
+          }
+        }
+      ]
+    },
+    "publishedIntensityAsset": {
+      "allOf": [
+        { "$ref": "#/$defs/assetBase" },
+        {
+          "properties": {
+            "role": { "const": "published_intensity_visual" },
+            "source_name": { "const": "OneMicrorganism_Intensity.jpg" },
+            "git_blob_sha1": {
+              "const": "8d5519fc90c45c583ec5774952525b1552928cef"
+            }
+          }
+        }
+      ]
+    },
+    "parameterVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_role",
+        "transcribed_by",
+        "independently_checked_by",
+        "checked_on"
+      ],
+      "properties": {
+        "source_role": { "const": "parameter_screenshot" },
+        "transcribed_by": { "type": "string", "minLength": 1 },
+        "independently_checked_by": { "type": "string", "minLength": 1 },
+        "checked_on": { "type": "string", "format": "date" }
+      }
+    },
+    "optics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "wavelength_um",
+        "reconstruction_distance_um",
+        "source_to_screen_distance_um",
+        "detector_width_um",
+        "detector_height_um",
+        "output_width_um",
+        "output_height_um",
+        "input_sample_pitch_um",
+        "output_sample_pitch_um"
+      ],
+      "properties": {
+        "backend": { "const": "point_source_kirchhoff_helmholtz" },
+        "wavelength_um": { "$ref": "#/$defs/positiveNumber" },
+        "reconstruction_distance_um": { "$ref": "#/$defs/positiveNumber" },
+        "source_to_screen_distance_um": { "$ref": "#/$defs/positiveNumber" },
+        "detector_width_um": { "$ref": "#/$defs/positiveNumber" },
+        "detector_height_um": { "$ref": "#/$defs/positiveNumber" },
+        "output_width_um": { "$ref": "#/$defs/positiveNumber" },
+        "output_height_um": { "$ref": "#/$defs/positiveNumber" },
+        "input_sample_pitch_um": { "$ref": "#/$defs/positiveNumber" },
+        "output_sample_pitch_um": { "$ref": "#/$defs/positiveNumber" }
+      }
+    },
+    "positiveNumber": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "sharedCrop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coordinate_system", "top", "left", "height", "width"],
+      "properties": {
+        "coordinate_system": { "const": "TOP_LEFT_ZERO_BASED_HALF_OPEN" },
+        "top": { "type": "integer", "minimum": 0 },
+        "left": { "type": "integer", "minimum": 0 },
+        "height": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "intensityMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "clip",
+        "candidate_input_min",
+        "candidate_input_max",
+        "reference_input_min",
+        "reference_input_max",
+        "output_min",
+        "output_max"
+      ],
+      "properties": {
+        "method": { "const": "FIXED_RANGE_LINEAR" },
+        "clip": { "const": true },
+        "candidate_input_min": { "type": "number" },
+        "candidate_input_max": { "type": "number" },
+        "reference_input_min": { "type": "number" },
+        "reference_input_max": { "type": "number" },
+        "output_min": { "type": "number" },
+        "output_max": { "type": "number" }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "u02_t2_status",
+        "acceptance_result",
+        "acceptance_threshold"
+      ],
+      "properties": {
+        "u02_t2_status": { "const": "BEKLİYOR" },
+        "acceptance_result": { "const": "NOT_EVALUATED" },
+        "acceptance_threshold": { "type": "null" }
+      }
+    }
+  }
+}

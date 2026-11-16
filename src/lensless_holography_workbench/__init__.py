@@ -12,6 +12,13 @@ from .depth_scan import (
     write_metrics_csv,
 )
 from .session import export_session, reopen_session
+from .unal_fixture import (
+    FixtureResolution,
+    LoadedFixture,
+    UnalFixtureError,
+    UnavailableFixture,
+    load_unal_k18_fixture,
+)
 
 __all__ = [
     "DepthMetric",
@@ -26,5 +33,10 @@ __all__ = [
     "compare_images",
     "export_session",
     "reopen_session",
+    "FixtureResolution",
+    "LoadedFixture",
+    "UnavailableFixture",
+    "UnalFixtureError",
+    "load_unal_k18_fixture",
 ]
 

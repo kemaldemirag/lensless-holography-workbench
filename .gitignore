@@ -7,5 +7,6 @@ dist/
 .pytest_cache/
 .coverage
 artifacts/
+external-fixtures/
 .test-tmp/
 
