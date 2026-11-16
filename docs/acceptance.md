@@ -24,10 +24,27 @@ hashes, and calculate a difference map and centre-line profile for aligned
 images. They deliberately do not emit PASS or FAIL. The following acceptance
 inputs are still open:
 
-- the published reference pair and exact geometry;
+- evidence-backed permission and a complete hash-verified local copy of the
+  published four-role fixture;
+- independently verified reconstruction parameters and exact geometry;
 - the common crop and intensity scaling rule;
 - a similarity threshold fixed before comparison;
 - a signed, standalone Windows build and installer validation.
+
+`load_unal_k18_fixture(manifest_path, expected_manifest_sha256=...)`
+distinguishes fixture unavailability from invalid evidence. A missing
+manifest, permission that is not granted, or a wholly absent payload set
+yields `UNAVAILABLE` and may produce a
+reason-bearing integration-test skip. Malformed metadata, a partial payload
+set, unsafe paths, source-identity conflicts, size or SHA-256 mismatches, and
+file mutation are hard failures and must not be converted to skips. The loader
+does not download or substitute data.
+
+Even a fully available fixture does not change this acceptance status. The
+fixture proves only that the local bytes and recorded provenance agree. Until
+the point-source backend, verified parameters, shared crop, intensity mapping,
+alignment procedure, and pre-registered threshold are all in place, U02-T2
+remains `BEKLİYOR` and its comparison result remains `NOT_EVALUATED`.
 
 ## U02-T3 Raspberry Pi acquisition
 

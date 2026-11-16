@@ -19,6 +19,9 @@
   JPEG, float TIFF, and hidden-Tk smoke tests;
 - hash-locked release dependencies, exact file-set SHA-256 manifests,
   deterministic portable ZIP creation, and atomic release publication;
+- a versioned, trusted-operator-declared external UNAL fixture contract that
+  resolves absent or permission-denied data as `UNAVAILABLE` and rejects
+  partial, unsafe, or tampered payloads;
 - unit, negative, and K03 real-data reproducibility tests.
 
 ## Not implemented
@@ -37,4 +40,10 @@ validation. Its release metadata is fail-closed: `NOT_SIGNED`, authenticity
 installer `NOT_BUILT`. Hashes establish integrity, not publisher authenticity.
 Public distribution remains blocked until the project license, publisher,
 certificate, signing tools, and installer validation are established.
+
+The external fixture contract does not bundle UNAL images or permission
+evidence and does not execute the future point-source reconstruction. Fixture
+availability is provenance readiness only; published-pair alignment,
+parameter verification, threshold registration, and U02-T2 acceptance remain
+open.
 

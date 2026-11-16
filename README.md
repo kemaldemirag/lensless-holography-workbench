@@ -56,6 +56,44 @@ changes, no session is published. Inputs are limited to 128 MiB per file and
 See [acceptance status](docs/acceptance.md) for the boundary between numerical
 reproduction and physical or customer acceptance.
 
+## External UNAL fixture
+
+The repository does not contain or download the K07/K18 UNAL example images.
+A local operator with permission evidence may place a complete manifest and
+its four payload files outside version control, then resolve it explicitly with
+`load_unal_k18_fixture(manifest_path, expected_manifest_sha256=...)`. The
+loader never searches for a replacement fixture and never substitutes K03 or
+synthetic data.
+
+The permission record is a trusted-local-operator declaration: the loader
+does not authenticate the grant authority or decide whether its evidence is
+legally sufficient. Independently controlled environments must pass a
+separately approved `expected_manifest_sha256` or verify a signature before
+calling this API. The loader issues no network requests, but the caller must
+choose storage that is not backed by a network mount or cloud hydration when
+strict offline behavior is required.
+
+The four fixed payload roles are `hologram`, `reference`,
+`parameter_screenshot`, and `published_intensity_visual`. A missing manifest,
+permission that is not granted, or an entirely absent four-file payload set
+returns an explicit `UNAVAILABLE` resolution. A malformed manifest, partial
+payload set, unsafe path, source-identity conflict, size mismatch, hash
+mismatch, or file mutation is a hard error rather than a skip.
+
+An available fixture establishes only that the operator-declared local bytes
+and pre-registered processing metadata match their manifest. It does not
+prove that those parameters, alignment, crop, or intensity mapping are
+scientifically correct, and it defines no similarity threshold, physical
+focus, or customer acceptance. U02-T2 therefore remains `BEKLİYOR` and every
+comparison remains `NOT_EVALUATED`. Local payloads belong under the ignored
+`external-fixtures/` directory and must not be committed, packaged, or
+redistributed.
+
+See [external fixture contract](docs/external-fixtures.md) for the versioned
+manifest, API outcomes, and CI handling rules, and the
+[UNAL source profile](docs/unal-k18-source-profile.md) for the pinned source
+identities and license boundary.
+
 ## Windows desktop workflow
 
 After installing the project in the active Python environment, start the

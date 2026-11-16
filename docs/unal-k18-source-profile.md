@@ -53,6 +53,35 @@ independently checked before an executable benchmark configuration is added.
 The published intensity JPG is a visual comparison source, not a bitwise
 golden output.
 
+## External fixture contract
+
+The local-only fixture has exactly four roles:
+
+- `hologram` is the reconstruction input;
+- `reference` is the published reference input and is not an output truth
+  image;
+- `parameter_screenshot` is provenance for values that still require an
+  independently checked transcription;
+- `published_intensity_visual` is a visual comparison source and is not a
+  bitwise golden output.
+
+`load_unal_k18_fixture(manifest_path, expected_manifest_sha256=...)` resolves
+only the explicitly supplied manifest. It does not download files, discover
+alternate directories, infer permission from public availability, or
+substitute K03 or synthetic data. A
+missing manifest, permission that is not granted, or a wholly absent payload
+set is explicitly `UNAVAILABLE`. Once any payload is present, an incomplete
+set, unsafe path, source-identity mismatch, size mismatch, SHA-256 mismatch,
+or mutation is a hard failure.
+
+The manifest must keep local-use permission separate from redistribution.
+Public source access and the Apache License 2.0 headers on Java files do not
+grant permission for the example images. The only permitted positive state is
+an evidence-backed grant scoped to local U02-T2 validation while
+redistribution remains prohibited. See
+[the external fixture contract](external-fixtures.md) for the complete
+versioned record and CI behavior.
+
 ## Separate propagation backend
 
 The current U02-T1 core implements a plane-wave angular-spectrum scan. UNAL
