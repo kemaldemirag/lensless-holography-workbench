@@ -45,6 +45,14 @@ pixel array, and SHA-256 hashes. An optional pre-aligned float TIFF reference
 can produce a difference map and centre-line profile. The comparison still
 reports `NOT_EVALUATED`: no similarity threshold is embedded in the code.
 
+Both CLI and desktop workflows read each canonical `signal`, `background_N`,
+and optional `reference_plane` source into one immutable byte snapshot before
+processing. SHA-256 and image decoding consume those same bytes, so the hash
+cannot describe a different read from the pixels being processed. Sources and
+roles are rechecked immediately before session publication; if any source
+changes, no session is published. Inputs are limited to 128 MiB per file and
+256 MiB in total.
+
 See [acceptance status](docs/acceptance.md) for the boundary between numerical
 reproduction and physical or customer acceptance.
 

@@ -32,6 +32,18 @@ Changing an input or parameter invalidates the previous scan. If a source file
 changes during or after scanning, its result cannot be exported under the new
 file identity.
 
+Before processing, the workflow reads each canonical `signal`, `background_N`,
+and optional `reference_plane` source into one immutable byte snapshot. The
+SHA-256 record and image decoder consume the same bytes. Files are limited to
+128 MiB each and the complete input set to 256 MiB. Immediately before session
+publication, every source and role is rechecked; a changed file,
+reordered/replaced role, or added/removed input prevents publication.
+
+GUI export is first written to a sibling staging directory. The workflow state
+and generation are checked again before the atomic rename; only the current
+workflow may publish the staged session. A stale export is discarded rather
+than exposed as a completed session.
+
 Signal and background images are converted to a floating-point grayscale
 plane. Integer and floating-point TIFF dynamic range is preserved; colour
 inputs use Pillow's grayscale conversion. The desktop shell limits one scan
