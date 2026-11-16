@@ -79,8 +79,11 @@ python -m tools.windows_release verify --release-dir <release-dir>
 The verifier checks the exact top-level and application file sets, every
 recorded byte size and SHA-256, canonical ZIP entries and content, the ZIP
 checksum sidecar, and all fail-closed signing and scientific-acceptance
-fields. Success is reported as JSON containing:
+fields. CLI JSON uses ASCII-safe escaping so paths and messages remain
+machine-readable under Windows console encodings. Success is reported on
+stdout as one JSON object containing:
 
+- `schema_version: "1.0"` and `command: "verify"`;
 - `verification: "OK"`;
 - the verified `directory` and `archive` paths;
 - `archive_sha256` and `checksum_file`;
@@ -93,6 +96,25 @@ fields. Success is reported as JSON containing:
 For the current internal build, `claims.code_signing` is `NOT_SIGNED`,
 authenticity is `NOT_ESTABLISHED`, distribution readiness is
 `INTERNAL_VALIDATION_ONLY`, and installer is `NOT_BUILT`.
+
+An expected integrity or contract failure writes one ASCII-safe JSON object to
+stderr, returns exit code 2, and does not print a traceback. Its stable shape
+is:
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "verify",
+  "verification": "FAILED",
+  "error": {
+    "type": "ReleaseError",
+    "message": "..."
+  }
+}
+```
+
+Unexpected programmer or runtime faults are not reclassified as ordinary
+verification failures.
 
 This is an integrity check, not an authenticity check. Even after successful
 verification, publisher authenticity remains `NOT_ESTABLISHED`; the command

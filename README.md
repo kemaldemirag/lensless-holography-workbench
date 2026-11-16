@@ -89,13 +89,17 @@ Recheck a copied release directory offline without rebuilding it:
 python -m tools.windows_release verify --release-dir <release-dir>
 ```
 
-A successful verification returns JSON with `verification: "OK"`, the
+A successful verification returns ASCII-safe JSON with
+`schema_version: "1.0"`, `command: "verify"`, `verification: "OK"`, the
 `directory`, `archive`, `archive_sha256`, `checksum_file`, `name`, and
 `version`. It also returns `source_provenance` (`status`, `git_head`, and
 `git_worktree_clean`) plus fail-closed `claims`, including
-`code_signing: "NOT_SIGNED"`. This confirms the recorded file set, hashes,
-ZIP, checksum, and claim boundaries. It does not establish a publisher
-identity or prove an Authenticode signature.
+`code_signing: "NOT_SIGNED"`. An expected verification failure writes one
+ASCII-safe JSON object to stderr with `verification: "FAILED"` and an `error`
+object containing `type` and `message`, exits with code 2, and emits no
+traceback. This confirms the recorded file set, hashes, ZIP, checksum, and
+claim boundaries. It does not establish a publisher identity or prove an
+Authenticode signature.
 
 Every generated manifest deliberately reports `NOT_SIGNED`, authenticity
 `NOT_ESTABLISHED`, distribution readiness `INTERNAL_VALIDATION_ONLY`, and
