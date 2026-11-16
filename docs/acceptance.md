@@ -14,6 +14,12 @@ The reproducibility test compares every metric row against the K03 golden CSV
 with an absolute tolerance of 1e-12. It runs only when the dated workspace
 contains the hash-verified K03 source package.
 
+The library-level Brenner/Sobel metric scores and coarse-to-fine search are
+subject to the same boundary. A score is only a number; the enclosing
+`AutofocusResult` is fixed to `NUMERICAL_NAVIGATION_ONLY`. It may help an
+operator inspect candidate depths, but it cannot change this status or
+establish physical focus.
+
 ## U02-T2 Windows comparison and session
 
 Status: `BEKLİYOR`

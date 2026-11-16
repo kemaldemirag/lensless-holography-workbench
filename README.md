@@ -56,6 +56,26 @@ changes, no session is published. Inputs are limited to 128 MiB per file and
 See [acceptance status](docs/acceptance.md) for the boundary between numerical
 reproduction and physical or customer acceptance.
 
+## Library-level autofocus navigation
+
+The core now exposes versioned Brenner and Sobel-variance focus metrics plus a
+deterministic coarse-to-fine depth search. The search uses one global discrete
+fine grid, reuses scores where coarse and fine samples overlap, supports an
+optional half-open ROI, and resolves exact score ties toward the lower depth.
+Its result type is fixed to `NUMERICAL_NAVIGATION_ONLY`. Factory results can
+be converted to a detached autofocus-result schema 1.0 dictionary, distinct
+from session-schema 1.0, that records the validated plan, prepared-wavefront
+source fingerprint, local ROI coordinate space, ordered scores, and numerical
+candidate.
+
+This API is currently library-only. It does not silently replace the selected
+depth in CLI, desktop, `metrics.csv`, or session-schema 1.0 outputs. A metric
+optimum is a navigation suggestion, not evidence of physical focus,
+reconstruction accuracy, U02-T2 completion, or customer acceptance.
+
+See [numerical autofocus](docs/autofocus.md) for the API contract, example,
+validation limits, reference provenance, and current integration boundary.
+
 A separate library-level
 [`point_source_kirchhoff_helmholtz` backend](docs/point-source-backend.md)
 implements the pinned UNAL spherical interpolation and Kirchhoff--Helmholtz

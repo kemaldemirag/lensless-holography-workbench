@@ -25,6 +25,10 @@
 - a separate, deterministic `point_source_kirchhoff_helmholtz` numerical core
   that preserves the pinned UNAL even-grid, spherical-interpolation, padded-
   FFT, shift, crop, and phase conventions for prepared real contrast arrays;
+- versioned Brenner and Sobel-variance numerical focus metrics plus a
+  deterministic, duplicate-safe coarse-to-fine navigation search with
+  explicit MAX/MIN direction, local ROI support, lower-depth tie breaking,
+  and source-bound JSON-compatible result records;
 - unit, negative, and K03 real-data reproducibility tests.
 
 ## Not implemented
@@ -35,6 +39,8 @@
 - published UNAL reference-pair alignment;
 - customer-approved similarity threshold;
 - physical-focus calibration;
+- CLI, desktop, or session-schema integration for the library-level autofocus
+  suggestion;
 - Raspberry Pi RAW acquisition and metadata binding.
 
 Version 0.3.1 can produce a standalone portable application for internal
@@ -51,4 +57,10 @@ is provenance readiness only; published-pair alignment, parameter
 verification, threshold registration, and U02-T2 acceptance remain open. See
 [the point-source backend contract](point-source-backend.md) for its numerical
 and licensing boundaries.
+
+The autofocus API is also deliberately outside session-schema 1.0. Its
+`NUMERICAL_NAVIGATION_ONLY` result does not alter the selected session depth,
+the stable metric CSV, or any acceptance state. See
+[the autofocus contract](autofocus.md) for the discrete search, serialization,
+and source-binding rules.
 
