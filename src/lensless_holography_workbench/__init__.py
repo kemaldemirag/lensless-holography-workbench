@@ -1,5 +1,11 @@
 """Headless lensless holography processing primitives."""
 
+from .autofocus import (
+    AutofocusResult,
+    CoarseToFinePlan,
+    FocusSample,
+    coarse_to_fine_autofocus,
+)
 from .comparison import ComparisonResult, compare_images
 from .depth_scan import (
     DepthMetric,
@@ -37,6 +43,10 @@ from .unal_fixture import (
 )
 
 __all__ = [
+    "AutofocusResult",
+    "CoarseToFinePlan",
+    "FocusSample",
+    "coarse_to_fine_autofocus",
     "DepthMetric",
     "DepthScanResult",
     "PreparedWavefront",
