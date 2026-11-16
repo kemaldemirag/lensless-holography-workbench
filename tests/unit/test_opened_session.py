@@ -141,7 +141,8 @@ class OpenedSessionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
             session_dir = self._export(Path(temporary))
             metrics_path = session_dir / "metrics.csv"
-            rows = list(csv.reader(metrics_path.open(encoding="utf-8", newline="")))
+            with metrics_path.open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.reader(stream))
             rows[2][0] = "1.5"
             with metrics_path.open("w", encoding="utf-8", newline="") as stream:
                 csv.writer(stream, lineterminator="\n").writerows(rows)
@@ -154,7 +155,8 @@ class OpenedSessionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
             session_dir = self._export(Path(temporary), comparison=True)
             profile_path = session_dir / "line-profile.csv"
-            rows = list(csv.reader(profile_path.open(encoding="utf-8", newline="")))
+            with profile_path.open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.reader(stream))
             rows[1][1] = str(float(rows[1][1]) + 1.0)
             with profile_path.open("w", encoding="utf-8", newline="") as stream:
                 csv.writer(stream, lineterminator="\n").writerows(rows)
