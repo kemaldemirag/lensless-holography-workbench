@@ -11,6 +11,13 @@ from .depth_scan import (
     scan_depths,
     write_metrics_csv,
 )
+from .focus_metrics import (
+    BrennerFocusMetric,
+    FocusDirection,
+    FocusMetric,
+    SobelVarianceFocusMetric,
+    evaluate_focus_metric,
+)
 from .point_source import (
     PointSourceParameters,
     PointSourceReconstruction,
@@ -38,6 +45,11 @@ __all__ = [
     "normalize_hologram",
     "scan_depths",
     "write_metrics_csv",
+    "BrennerFocusMetric",
+    "FocusDirection",
+    "FocusMetric",
+    "SobelVarianceFocusMetric",
+    "evaluate_focus_metric",
     "ComparisonResult",
     "compare_images",
     "PointSourceParameters",
