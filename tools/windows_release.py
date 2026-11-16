@@ -21,7 +21,7 @@ import zipfile
 import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Sequence
+from typing import Sequence, TextIO
 
 
 APP_DIRECTORY_NAME = "LenslessHolographyWorkbench"
@@ -30,6 +30,7 @@ PRODUCT_ID = "U02"
 TEST_ID = "U02-T2"
 ACCEPTANCE_STATUS = "BEKLİYOR"
 COMPARISON_RESULT = "NOT_EVALUATED"
+CLI_SCHEMA_VERSION = "1.0"
 SIGNING_REASON = (
     "No signing certificate or Authenticode verification was supplied."
 )
@@ -1004,16 +1005,46 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_cli_json(payload: object, *, stream: TextIO | None = None) -> None:
+    destination = sys.stdout if stream is None else stream
+    print(
+        json.dumps(
+            payload,
+            ensure_ascii=True,
+            sort_keys=True,
+            indent=2,
+        ),
+        file=destination,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "verify":
-        artifacts, manifest = _verify_release_bundle_state(args.release_dir)
+        try:
+            artifacts, manifest = _verify_release_bundle_state(args.release_dir)
+        except ReleaseError as exc:
+            _print_cli_json(
+                {
+                    "schema_version": CLI_SCHEMA_VERSION,
+                    "command": "verify",
+                    "verification": "FAILED",
+                    "error": {
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                    },
+                },
+                stream=sys.stderr,
+            )
+            return 2
         build_environment = manifest["build_environment"]
         signing = manifest["code_signing"]
         authenticity = manifest["authenticity"]
         readiness = manifest["distribution_readiness"]
         boundary = manifest["acceptance_boundary"]
         result = {
+            "schema_version": CLI_SCHEMA_VERSION,
+            "command": "verify",
             "verification": "OK",
             "directory": str(artifacts.directory),
             "archive": str(artifacts.archive),
@@ -1047,6 +1078,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             metadata,
         )
         result = {
+            "schema_version": CLI_SCHEMA_VERSION,
+            "command": "package",
             "directory": str(artifacts.directory),
             "archive": str(artifacts.archive),
             "archive_sha256": artifacts.archive_sha256,
@@ -1065,20 +1098,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_repository=root,
         )
         result = {
+            "schema_version": CLI_SCHEMA_VERSION,
+            "command": "build",
             "directory": str(artifacts.directory),
             "archive": str(artifacts.archive),
             "archive_sha256": artifacts.archive_sha256,
             "checksum_file": str(artifacts.checksum_file),
             "code_signing": "NOT_SIGNED",
         }
-    print(
-        json.dumps(
-            result,
-            ensure_ascii=False,
-            sort_keys=True,
-            indent=2,
-        )
-    )
+    _print_cli_json(result)
     return 0
 
 

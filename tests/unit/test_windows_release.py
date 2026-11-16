@@ -7,7 +7,7 @@ import struct
 import tempfile
 import unittest
 import zipfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -317,7 +317,10 @@ class WindowsReleaseTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(directory_verifier.call_count, 1)
+        output.getvalue().encode("ascii")
         result = json.loads(output.getvalue())
+        self.assertEqual(result["schema_version"], "1.0")
+        self.assertEqual(result["command"], "verify")
         self.assertEqual(result["verification"], "OK")
         self.assertEqual(result["archive_sha256"], release.archive_sha256)
         self.assertEqual(result["claims"]["code_signing"], "NOT_SIGNED")
@@ -329,14 +332,41 @@ class WindowsReleaseTests(unittest.TestCase):
             result["source_provenance"]["status"],
             "NOT_ESTABLISHED",
         )
+        self.assertEqual(result["claims"]["acceptance_status"], "BEKLİYOR")
 
         release.checksum_file.write_text(
             f"{'0' * 64}  {release.archive.name}\n",
             encoding="ascii",
             newline="\n",
         )
-        with self.assertRaisesRegex(ReleaseError, "checksum does not match"):
-            release_main(["verify", "--release-dir", str(release.directory)])
+        error_output = io.StringIO()
+        with redirect_stderr(error_output):
+            exit_code = release_main(
+                ["verify", "--release-dir", str(release.directory)]
+            )
+        self.assertEqual(exit_code, 2)
+        error_output.getvalue().encode("ascii")
+        self.assertNotIn("Traceback", error_output.getvalue())
+        error = json.loads(error_output.getvalue())
+        self.assertEqual(error["schema_version"], "1.0")
+        self.assertEqual(error["command"], "verify")
+        self.assertEqual(error["verification"], "FAILED")
+        self.assertEqual(error["error"]["type"], "ReleaseError")
+        self.assertIn("checksum does not match", error["error"]["message"])
+
+    def test_verify_command_reports_missing_directory_without_traceback(self) -> None:
+        error_output = io.StringIO()
+
+        with redirect_stderr(error_output):
+            exit_code = release_main(
+                ["verify", "--release-dir", str(self.base / "missing")]
+            )
+
+        self.assertEqual(exit_code, 2)
+        self.assertNotIn("Traceback", error_output.getvalue())
+        error = json.loads(error_output.getvalue())
+        self.assertEqual(error["verification"], "FAILED")
+        self.assertIn("does not exist", error["error"]["message"])
 
     def test_verifier_rejects_false_distribution_claims(self) -> None:
         release = assemble_portable_release(
