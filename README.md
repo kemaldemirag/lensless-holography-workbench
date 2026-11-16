@@ -2,7 +2,7 @@
 
 This repository contains the deterministic processing core, Windows desktop
 shell, and internal portable-build workflow for product U02 in the 15 November
-2026 model reports. Version 0.3.0 reproduces an angular-spectrum depth scan,
+2026 model reports. Version 0.3.1 reproduces an angular-spectrum depth scan,
 keeps every reconstructed plane available for inspection, and exports a
 hash-verified file-based session. Physical-focus acceptance remains outside
 this slice.
@@ -81,7 +81,7 @@ input constraints, and current packaging boundary.
 
 ## Windows portable validation build
 
-The 0.3.0 release workflow builds a PyInstaller `onedir` application, runs
+The 0.3.1 release workflow builds a PyInstaller `onedir` application, runs
 frozen-runtime numerical and hidden-UI smoke tests, then publishes an atomic
 portable directory and deterministic ZIP with exact file hashes and sizes.
 Install the hash-locked Windows x64 / CPython 3.12 build environment and run:

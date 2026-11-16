@@ -1,6 +1,6 @@
 # Windows release workflow
 
-Version 0.3.0 adds a Windows x64 portable-build path for internal validation.
+Version 0.3.1 provides a Windows x64 portable-build path for internal validation.
 It does not add a signed installer or establish publisher authenticity.
 
 ## Locked build environment
@@ -49,18 +49,18 @@ A failed build removes only its own unpublished staging output.
 
 ## Artifact layout
 
-For version 0.3.0, the versioned release directory is:
+For version 0.3.1, the versioned release directory is:
 
 ```text
-dist/releases/lensless-holography-workbench-0.3.0-windows-x64/
+dist/releases/lensless-holography-workbench-0.3.1-windows-x64/
   app/
     LenslessHolographyWorkbench.exe
     PORTABLE-README.txt
     THIRD-PARTY-NOTICES.txt
     _internal/...
   RELEASE-MANIFEST.json
-  lensless-holography-workbench-0.3.0-windows-x64.zip
-  lensless-holography-workbench-0.3.0-windows-x64.zip.sha256
+  lensless-holography-workbench-0.3.1-windows-x64.zip
+  lensless-holography-workbench-0.3.1-windows-x64.zip.sha256
 ```
 
 The deterministic ZIP claim is deliberately narrow: the same input file tree

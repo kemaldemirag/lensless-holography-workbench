@@ -31,7 +31,7 @@
 - physical-focus calibration;
 - Raspberry Pi RAW acquisition and metadata binding.
 
-Version 0.3.0 can produce a standalone portable application for internal
+Version 0.3.1 can produce a standalone portable application for internal
 validation. Its release metadata is fail-closed: `NOT_SIGNED`, authenticity
 `NOT_ESTABLISHED`, distribution readiness `INTERNAL_VALIDATION_ONLY`, and
 installer `NOT_BUILT`. Hashes establish integrity, not publisher authenticity.

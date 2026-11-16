@@ -68,7 +68,7 @@ threshold and therefore cannot display or export PASS or FAIL.
 ## Packaging boundary
 
 The regular entry point runs from an installed Python 3.12 environment and
-uses its Tk runtime. Version 0.3.0 also provides an internal portable Windows
+uses its Tk runtime. Version 0.3.1 also provides an internal portable Windows
 x64 build workflow. The frozen application must pass numerical, image-format,
 and hidden-Tk smoke tests before the atomic release directory and ZIP are
 published.
