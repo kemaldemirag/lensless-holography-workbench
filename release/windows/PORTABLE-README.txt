@@ -1,4 +1,4 @@
-Lensless Holography Workbench 0.3.0 - Windows x64 portable validation build
+Lensless Holography Workbench 0.3.1 - Windows x64 portable validation build
 
 Start: LenslessHolographyWorkbench.exe
 

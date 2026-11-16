@@ -45,7 +45,7 @@ class WindowsReleaseTests(unittest.TestCase):
         self.base = Path(self.temporary.name)
         self.metadata = ProjectMetadata(
             name="lensless-holography-workbench",
-            version="0.3.0",
+            version="0.3.1",
             description="Desktop shell",
         )
         runtime = {
@@ -135,7 +135,7 @@ class WindowsReleaseTests(unittest.TestCase):
         metadata = read_project_metadata(root / "pyproject.toml")
 
         self.assertEqual(metadata.name, "lensless-holography-workbench")
-        self.assertEqual(metadata.version, "0.3.0")
+        self.assertEqual(metadata.version, "0.3.1")
 
         lock = (root / "requirements-release.lock").read_text(encoding="utf-8")
         self.assertEqual(lock.count("--hash=sha256:"), 9)
@@ -148,7 +148,7 @@ class WindowsReleaseTests(unittest.TestCase):
         third_party = (
             root / "release" / "windows" / "THIRD-PARTY-NOTICES.txt"
         ).read_text(encoding="utf-8")
-        self.assertIn("0.3.0", portable_notice)
+        self.assertIn("0.3.1", portable_notice)
         self.assertIn("Code signing: NOT_SIGNED", portable_notice)
         self.assertIn("project LICENSE has not yet been selected", third_party)
 
@@ -160,8 +160,8 @@ class WindowsReleaseTests(unittest.TestCase):
         )
         contents = output.read_text(encoding="utf-8")
 
-        self.assertIn("filevers=(0, 3, 0, 0)", contents)
-        self.assertIn("ProductVersion', '0.3.0'", contents)
+        self.assertIn("filevers=(0, 3, 1, 0)", contents)
+        self.assertIn("ProductVersion', '0.3.1'", contents)
         with self.assertRaisesRegex(ReleaseError, "numeric components"):
             windows_version_tuple("release")
 
@@ -434,7 +434,7 @@ class WindowsReleaseTests(unittest.TestCase):
     def test_publish_race_does_not_delete_competing_destination(self) -> None:
         output = self.base / "race-output"
         release_name = (
-            "lensless-holography-workbench-0.3.0-windows-x64"
+            "lensless-holography-workbench-0.3.1-windows-x64"
         )
         destination = output / release_name
 
