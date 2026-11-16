@@ -15,6 +15,7 @@ from .depth_scan import PreparedWavefront
 from .focus_metrics import FocusDirection, FocusMetric, evaluate_focus_metric
 
 NUMERICAL_NAVIGATION_ONLY = "NUMERICAL_NAVIGATION_ONLY"
+_AUTOFOCUS_RESULT_SCHEMA_VERSION = "1.0"
 _MAX_UNIQUE_PLANES = 10_000
 _MAX_EXACT_FINE_GRID_INDEX = (1 << 53) - 1
 _RATIO_TOLERANCE = 1e-10
@@ -57,6 +58,16 @@ def _canonical_roi_bounds(
     return top, left, bottom, right
 
 
+def _canonical_sha256(value: object, *, name: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{name} must be a canonical lowercase SHA-256")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class CoarseToFinePlan:
     """Validated inclusive micrometre plan on one global fine-step grid."""
@@ -82,6 +93,17 @@ class CoarseToFinePlan:
             )
         _plan_indices(self)
 
+    def as_dict(self) -> dict[str, float]:
+        """Return a detached JSON-compatible plan record with explicit units."""
+
+        return {
+            "start_um": self.start,
+            "stop_um": self.stop,
+            "coarse_step_um": self.coarse_step,
+            "fine_step_um": self.fine_step,
+            "fine_radius_um": self.fine_radius,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class FocusSample:
@@ -102,6 +124,11 @@ class FocusSample:
             _finite_real(self.score, name="score"),
         )
 
+    def as_dict(self) -> dict[str, float]:
+        """Return a detached JSON-compatible sample record."""
+
+        return {"depth_um": self.depth_um, "score": self.score}
+
 
 @dataclass(frozen=True, slots=True)
 class AutofocusResult:
@@ -115,6 +142,8 @@ class AutofocusResult:
     best_depth_um: float
     best_score: float
     roi_bounds: tuple[int, int, int, int] | None
+    plan: CoarseToFinePlan | None = None
+    source_fingerprint_sha256: str | None = None
     result_type: str = field(default=NUMERICAL_NAVIGATION_ONLY, init=False)
 
     def __post_init__(self) -> None:
@@ -124,6 +153,17 @@ class AutofocusResult:
             raise ValueError("metric_version must be a non-empty string")
         if not isinstance(self.metric_direction, FocusDirection):
             raise ValueError("metric_direction must be a FocusDirection")
+        if self.plan is not None and not isinstance(self.plan, CoarseToFinePlan):
+            raise ValueError("plan must be a CoarseToFinePlan")
+        if self.source_fingerprint_sha256 is not None:
+            object.__setattr__(
+                self,
+                "source_fingerprint_sha256",
+                _canonical_sha256(
+                    self.source_fingerprint_sha256,
+                    name="source_fingerprint_sha256",
+                ),
+            )
         try:
             coarse_samples = tuple(self.coarse_samples)
             fine_samples = tuple(self.fine_samples)
@@ -137,6 +177,51 @@ class AutofocusResult:
             raise ValueError("fine_samples must contain only FocusSample values")
         object.__setattr__(self, "coarse_samples", coarse_samples)
         object.__setattr__(self, "fine_samples", fine_samples)
+        if self.plan is not None:
+            coarse_indices, fine_span, _coarse_stride, radius_steps = _plan_indices(
+                self.plan
+            )
+            expected_coarse_depths = _validated_depths(
+                self.plan,
+                coarse_indices,
+                fine_span,
+            )
+            if (
+                tuple(sample.depth_um for sample in coarse_samples)
+                != expected_coarse_depths
+            ):
+                raise ValueError("coarse samples do not match the autofocus plan")
+            coarse_best = _select_best(coarse_samples, self.metric_direction)
+            coarse_best_index = next(
+                index
+                for index, sample in zip(
+                    coarse_indices,
+                    coarse_samples,
+                    strict=True,
+                )
+                if sample is coarse_best
+            )
+            fine_low = max(0, coarse_best_index - radius_steps)
+            fine_high = min(fine_span, coarse_best_index + radius_steps)
+            expected_fine_depths = _validated_depths(
+                self.plan,
+                tuple(range(fine_low, fine_high + 1)),
+                fine_span,
+            )
+            if (
+                tuple(sample.depth_um for sample in fine_samples)
+                != expected_fine_depths
+            ):
+                raise ValueError("fine samples do not match the autofocus plan")
+            coarse_by_depth = {
+                sample.depth_um: sample for sample in coarse_samples
+            }
+            for sample in fine_samples:
+                coarse_sample = coarse_by_depth.get(sample.depth_um)
+                if coarse_sample is not None and coarse_sample != sample:
+                    raise ValueError(
+                        "coarse and fine overlap must contain the same focus sample"
+                    )
         best_depth = _finite_real(self.best_depth_um, name="best_depth_um")
         best_score = _finite_real(self.best_score, name="best_score")
         object.__setattr__(self, "best_depth_um", best_depth)
@@ -151,6 +236,34 @@ class AutofocusResult:
             "roi_bounds",
             _canonical_roi_bounds(self.roi_bounds),
         )
+
+    def as_dict(self) -> dict[str, object]:
+        """Return a detached, versioned, JSON-compatible result record."""
+
+        if self.plan is None or self.source_fingerprint_sha256 is None:
+            raise ValueError(
+                "serialization requires an autofocus plan and source fingerprint"
+            )
+
+        return {
+            "schema_version": _AUTOFOCUS_RESULT_SCHEMA_VERSION,
+            "result_type": self.result_type,
+            "metric": {
+                "name": self.metric_name,
+                "version": self.metric_version,
+                "direction": self.metric_direction.value,
+            },
+            "plan": self.plan.as_dict(),
+            "source_fingerprint_sha256": self.source_fingerprint_sha256,
+            "metric_roi_bounds": (
+                list(self.roi_bounds) if self.roi_bounds is not None else None
+            ),
+            "roi_coordinate_space": "prepared_amplitude_half_open",
+            "coarse_samples": [sample.as_dict() for sample in self.coarse_samples],
+            "fine_samples": [sample.as_dict() for sample in self.fine_samples],
+            "best": {"depth_um": self.best_depth_um, "score": self.best_score},
+            "units": {"depth": "um", "score": "metric_defined"},
+        }
 
 
 def _plan_indices(
@@ -294,6 +407,10 @@ def coarse_to_fine_autofocus(
 
     if not isinstance(plan, CoarseToFinePlan):
         raise TypeError("plan must be a CoarseToFinePlan")
+    source_fingerprint = _canonical_sha256(
+        getattr(prepared, "source_fingerprint", None),
+        name="prepared.source_fingerprint",
+    )
     coarse_indices, fine_span, _coarse_stride, radius_steps = _plan_indices(plan)
     cache: dict[int, FocusSample] = {}
 
@@ -350,6 +467,8 @@ def coarse_to_fine_autofocus(
         best_depth_um=best.depth_um,
         best_score=best.score,
         roi_bounds=_canonical_roi_bounds(roi_bounds),
+        plan=plan,
+        source_fingerprint_sha256=source_fingerprint,
     )
 
 
