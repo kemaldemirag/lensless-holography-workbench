@@ -56,6 +56,12 @@ changes, no session is published. Inputs are limited to 128 MiB per file and
 See [acceptance status](docs/acceptance.md) for the boundary between numerical
 reproduction and physical or customer acceptance.
 
+A separate library-level
+[`point_source_kirchhoff_helmholtz` backend](docs/point-source-backend.md)
+implements the pinned UNAL spherical interpolation and Kirchhoff--Helmholtz
+FFT path for an already prepared real contrast hologram. It is not a physical-
+focus or acceptance workflow and is not a substitute for the external fixture.
+
 ## External UNAL fixture
 
 The repository does not contain or download the K07/K18 UNAL example images.

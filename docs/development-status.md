@@ -22,6 +22,9 @@
 - a versioned, trusted-operator-declared external UNAL fixture contract that
   resolves absent or permission-denied data as `UNAVAILABLE` and rejects
   partial, unsafe, or tampered payloads;
+- a separate, deterministic `point_source_kirchhoff_helmholtz` numerical core
+  that preserves the pinned UNAL even-grid, spherical-interpolation, padded-
+  FFT, shift, crop, and phase conventions for prepared real contrast arrays;
 - unit, negative, and K03 real-data reproducibility tests.
 
 ## Not implemented
@@ -42,8 +45,10 @@ Public distribution remains blocked until the project license, publisher,
 certificate, signing tools, and installer validation are established.
 
 The external fixture contract does not bundle UNAL images or permission
-evidence and does not execute the future point-source reconstruction. Fixture
-availability is provenance readiness only; published-pair alignment,
-parameter verification, threshold registration, and U02-T2 acceptance remain
-open.
+evidence and does not execute the point-source backend. The backend itself has
+no authorized real UNAL fixture or acceptance semantics. Fixture availability
+is provenance readiness only; published-pair alignment, parameter
+verification, threshold registration, and U02-T2 acceptance remain open. See
+[the point-source backend contract](point-source-backend.md) for its numerical
+and licensing boundaries.
 
