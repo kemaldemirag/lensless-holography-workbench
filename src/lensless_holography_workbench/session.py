@@ -9,6 +9,8 @@ import platform
 import shutil
 import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,16 @@ U02_T2_STATUS = "BEKLİYOR"
 U02_T2_STATUS_REASON = (
     "Published-reference alignment and the image-similarity threshold must be fixed before comparison."
 )
+MAX_INPUT_FILE_BYTES = 128 * 1024 * 1024
+MAX_TOTAL_INPUT_BYTES = 256 * 1024 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class InputFileSnapshot:
+    file_name: str
+    size_bytes: int
+    sha256: str
+    content: bytes
 
 
 def sha256_file(path: str | Path) -> str:
@@ -50,8 +62,8 @@ def save_float_tiff(path: str | Path, array: np.ndarray) -> Path:
     return output
 
 
-def load_float_tiff(path: str | Path) -> np.ndarray:
-    with Image.open(path) as image:
+def _load_float_tiff(source: str | Path | BytesIO) -> np.ndarray:
+    with Image.open(source) as image:
         if image.format != "TIFF" or image.mode != "F":
             raise ValueError(
                 "session/reference TIFF must contain one 32-bit floating-point plane"
@@ -60,6 +72,16 @@ def load_float_tiff(path: str | Path) -> np.ndarray:
     if array.ndim != 2:
         raise ValueError("session TIFF must contain one two-dimensional plane")
     return array
+
+
+def load_float_tiff(path: str | Path) -> np.ndarray:
+    return _load_float_tiff(path)
+
+
+def load_float_tiff_bytes(content: bytes) -> np.ndarray:
+    """Decode an immutable 32-bit float TIFF snapshot."""
+
+    return _load_float_tiff(BytesIO(content))
 
 
 def _write_line_profile(path: Path, result: ComparisonResult) -> None:
@@ -83,18 +105,130 @@ def _write_line_profile(path: Path, result: ComparisonResult) -> None:
             )
 
 
-def _input_records(inputs: Mapping[str, str | Path]) -> list[dict[str, object]]:
+def snapshot_input_hashes(
+    inputs: Mapping[str, str | Path],
+) -> dict[str, str]:
+    """Capture a stable, role-keyed identity before processing inputs."""
+
+    snapshot: dict[str, str] = {}
+    for role, raw_path in sorted(inputs.items()):
+        path = Path(raw_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"input does not exist: {path}")
+        snapshot[role], _size = _stable_input_identity(role, path)
+    return snapshot
+
+
+def snapshot_input_files(
+    inputs: Mapping[str, str | Path],
+) -> dict[str, InputFileSnapshot]:
+    """Read bounded immutable bytes so hashing and decoding share a source."""
+
+    snapshots: dict[str, InputFileSnapshot] = {}
+    total_bytes = 0
+    for role, raw_path in sorted(inputs.items()):
+        path = Path(raw_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"input does not exist: {path}")
+        try:
+            before = path.stat()
+            if before.st_size > MAX_INPUT_FILE_BYTES:
+                raise ValueError(f"input exceeds byte limit: {role}")
+            remaining_bytes = MAX_TOTAL_INPUT_BYTES - total_bytes
+            if before.st_size > remaining_bytes:
+                raise ValueError("input set exceeds total byte limit")
+            with path.open("rb") as stream:
+                content = stream.read(
+                    min(MAX_INPUT_FILE_BYTES, remaining_bytes) + 1
+                )
+            after = path.stat()
+        except OSError as exc:
+            raise ValueError(f"input changed while snapshotting: {role}") from exc
+        if len(content) > MAX_INPUT_FILE_BYTES:
+            raise ValueError(f"input exceeds byte limit: {role}")
+        if len(content) > remaining_bytes:
+            raise ValueError("input set exceeds total byte limit")
+        if _stat_identity(before) != _stat_identity(after):
+            raise ValueError(f"input changed while snapshotting: {role}")
+        if len(content) != after.st_size:
+            raise ValueError(f"input changed while snapshotting: {role}")
+        total_bytes += len(content)
+        snapshots[role] = InputFileSnapshot(
+            file_name=path.name,
+            size_bytes=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+            content=content,
+        )
+    return snapshots
+
+
+def _stat_identity(metadata: object) -> tuple[object, ...]:
+    fields = (
+        "st_dev",
+        "st_ino",
+        "st_mode",
+        "st_size",
+        "st_mtime_ns",
+        "st_ctime_ns",
+    )
+    return tuple(getattr(metadata, field) for field in fields)
+
+
+def _stable_input_identity(role: str, path: Path) -> tuple[str, int]:
+    """Hash one input only when its filesystem identity remains stable."""
+
+    try:
+        before = path.stat()
+        digest = sha256_file(path)
+        after = path.stat()
+    except OSError as exc:
+        raise ValueError(f"input changed while hashing: {role}") from exc
+    if _stat_identity(before) != _stat_identity(after):
+        raise ValueError(f"input changed while hashing: {role}")
+    return digest, after.st_size
+
+
+def _assert_expected_input_hashes(
+    inputs: Mapping[str, str | Path],
+    expected_input_hashes: Mapping[str, str],
+) -> None:
+    actual = snapshot_input_hashes(inputs)
+    if set(actual) != set(expected_input_hashes):
+        raise ValueError("expected input hashes must exactly match input roles")
+    for role, digest in actual.items():
+        if digest != expected_input_hashes[role]:
+            raise ValueError(f"input files changed since processing: {role}")
+
+
+def _input_records(
+    inputs: Mapping[str, str | Path],
+    expected_input_hashes: Mapping[str, str] | None = None,
+) -> list[dict[str, object]]:
+    expected_hashes = (
+        dict(expected_input_hashes)
+        if expected_input_hashes is not None
+        else None
+    )
+    if expected_hashes is not None and set(expected_hashes) != set(inputs):
+        raise ValueError("expected input hashes must exactly match input roles")
+
     records: list[dict[str, object]] = []
     for role, raw_path in sorted(inputs.items()):
         path = Path(raw_path)
         if not path.is_file():
             raise FileNotFoundError(f"input does not exist: {path}")
+        actual_hash, size_bytes = _stable_input_identity(role, path)
+        if (
+            expected_hashes is not None
+            and actual_hash != expected_hashes[role]
+        ):
+            raise ValueError(f"input files changed since processing: {role}")
         records.append(
             {
                 "role": role,
                 "file_name": path.name,
-                "size_bytes": path.stat().st_size,
-                "sha256": sha256_file(path),
+                "size_bytes": size_bytes,
+                "sha256": actual_hash,
             }
         )
     return records
@@ -170,14 +304,21 @@ def export_session(
     parameters: PropagationParameters,
     selected_depth_um: float,
     inputs: Mapping[str, str | Path],
+    expected_input_hashes: Mapping[str, str] | None = None,
     reference: np.ndarray | None = None,
     comparison_line_row: int | None = None,
 ) -> dict[str, Any]:
     """Write one immutable session directory and return its JSON payload."""
 
+    frozen_inputs = dict(inputs)
+    frozen_expected_hashes = (
+        dict(expected_input_hashes)
+        if expected_input_hashes is not None
+        else None
+    )
     _validate_session_consistency(prepared, scan, parameters)
     selected_depth = _validate_selected_depth(scan, selected_depth_um)
-    input_records = _input_records(inputs)
+    input_records = _input_records(frozen_inputs, frozen_expected_hashes)
     selected_float64 = prepared.amplitude_at(selected_depth)
     selected_float32 = np.asarray(selected_float64, dtype=np.float32)
     comparison: ComparisonResult | None = None
@@ -248,6 +389,11 @@ def export_session(
             staging / "sha256.json",
             {"algorithm": "sha256", "files": manifest},
         )
+        if frozen_expected_hashes is not None:
+            _assert_expected_input_hashes(
+                frozen_inputs,
+                frozen_expected_hashes,
+            )
         staging.replace(output)
         return session
     except BaseException:

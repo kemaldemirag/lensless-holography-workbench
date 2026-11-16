@@ -8,7 +8,10 @@ import numpy as np
 from PIL import Image
 
 from lensless_holography_workbench import cli, desktop_workflow
-from lensless_holography_workbench.image_io import load_grayscale_image
+from lensless_holography_workbench.image_io import (
+    load_grayscale_bytes,
+    load_grayscale_image,
+)
 
 
 class ImageIoTests(unittest.TestCase):
@@ -22,8 +25,11 @@ class ImageIoTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def test_cli_and_desktop_share_the_same_loader(self) -> None:
-        self.assertIs(cli.load_grayscale_image, load_grayscale_image)
-        self.assertIs(desktop_workflow.load_grayscale_image, load_grayscale_image)
+        self.assertIs(cli.load_grayscale_bytes, load_grayscale_bytes)
+        self.assertIs(
+            desktop_workflow.load_grayscale_bytes,
+            load_grayscale_bytes,
+        )
 
         path = self.base / "rgb.png"
         pixels = np.array(
@@ -38,6 +44,10 @@ class ImageIoTests(unittest.TestCase):
         with Image.open(path) as image:
             expected = np.asarray(image.convert("L"), dtype=np.float64)
         np.testing.assert_array_equal(load_grayscale_image(path), expected)
+        np.testing.assert_array_equal(
+            load_grayscale_bytes(path.read_bytes()),
+            expected,
+        )
 
     def test_preserves_16_bit_and_float_single_channel_values(self) -> None:
         integer_path = self.base / "integer.tiff"

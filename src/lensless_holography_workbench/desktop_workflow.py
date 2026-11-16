@@ -9,6 +9,8 @@ comparison into a physical-focus or customer-acceptance claim.
 from __future__ import annotations
 
 import copy
+import shutil
+import tempfile
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -27,12 +29,14 @@ from .depth_scan import (
     normalize_hologram,
 )
 from .session import (
+    InputFileSnapshot,
     U02_T2_STATUS,
     export_session,
-    load_float_tiff,
-    sha256_file,
+    load_float_tiff_bytes,
+    snapshot_input_files,
+    snapshot_input_hashes,
 )
-from .image_io import load_grayscale_image
+from .image_io import load_grayscale_bytes
 from .opened_session import OpenedSession, open_session_for_inspection
 
 ProgressCallback = Callable[[int, int], None]
@@ -122,6 +126,7 @@ class ScanRequest:
     parameters: PropagationParameters
     cancel_event: threading.Event
     input_hashes: tuple[tuple[str, str], ...]
+    input_snapshots: tuple[tuple[str, InputFileSnapshot], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,10 +142,7 @@ class PlanePreview:
 
 
 def _input_hashes(inputs: InputSelection) -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (role, sha256_file(path))
-        for role, path in sorted(inputs.as_session_inputs().items())
-    )
+    return tuple(snapshot_input_hashes(inputs.as_session_inputs()).items())
 
 
 def _plain_copy(value: object) -> object:
@@ -315,18 +317,25 @@ class DesktopWorkflow:
                 raise RuntimeError("a scan is already running")
             self._inputs.validate()
             self._parameters.validate()
+            snapshots = snapshot_input_files(
+                self._inputs.as_session_inputs()
+            )
+            hashes = tuple(
+                (role, snapshot.sha256)
+                for role, snapshot in snapshots.items()
+            )
             self._generation += 1
             cancel_event = threading.Event()
             self._active_cancel = cancel_event
             self._state = WorkflowState.RUNNING
             self._error_message = None
-            hashes = _input_hashes(self._inputs)
             return ScanRequest(
                 generation=self._generation,
                 inputs=self._inputs,
                 parameters=self._parameters,
                 cancel_event=cancel_event,
                 input_hashes=hashes,
+                input_snapshots=tuple(snapshots.items()),
             )
 
     def cancel_scan(self) -> bool:
@@ -363,12 +372,16 @@ class DesktopWorkflow:
             if request.cancel_event.is_set():
                 return False
 
-            signal = load_grayscale_image(request.inputs.signal)
+            snapshots = dict(request.input_snapshots)
+            signal = load_grayscale_bytes(snapshots["signal"].content)
             backgrounds = [
-                load_grayscale_image(path) for path in request.inputs.backgrounds
+                load_grayscale_bytes(
+                    snapshots[f"background_{index}"].content
+                )
+                for index in range(1, len(request.inputs.backgrounds) + 1)
             ]
             reference = (
-                load_float_tiff(request.inputs.reference_tiff)
+                load_float_tiff_bytes(snapshots["reference_plane"].content)
                 if request.inputs.reference_tiff is not None
                 else None
             )
@@ -525,25 +538,30 @@ class DesktopWorkflow:
                 if self._reference is not None
                 else None
             )
+        temporary_output: Path | None = None
         try:
-            if _input_hashes(inputs) != expected_hashes:
-                raise ValueError("input files changed since the scan")
-            with self._lock:
-                if (
-                    generation != self._generation
-                    or self._state
-                    not in {WorkflowState.SCANNED, WorkflowState.EXPORTED}
-                ):
-                    raise StaleWorkflowError(
-                        "workflow changed during export"
-                    )
+            output = Path(output_directory)
+            if output.exists() and (
+                not output.is_dir() or any(output.iterdir())
+            ):
+                raise FileExistsError(
+                    "session destination must not exist or must be empty"
+                )
+            output.parent.mkdir(parents=True, exist_ok=True)
+            temporary_output = Path(
+                tempfile.mkdtemp(
+                    prefix=f".{output.name}.workflow-",
+                    dir=output.parent,
+                )
+            )
             session = export_session(
-                output_directory,
+                temporary_output,
                 prepared=prepared,
                 scan=scan,
                 parameters=parameters,
                 selected_depth_um=selected_depth,
                 inputs=inputs.as_session_inputs(),
+                expected_input_hashes=dict(expected_hashes),
                 reference=reference,
                 comparison_line_row=comparison_line_row,
             )
@@ -563,6 +581,33 @@ class DesktopWorkflow:
                     raise ValueError(
                         "desktop export must keep comparison unevaluated"
                     )
+            stored_session = copy.deepcopy(session)
+            returned_session = copy.deepcopy(stored_session)
+            with self._lock:
+                if (
+                    generation != self._generation
+                    or self._state
+                    not in {WorkflowState.SCANNED, WorkflowState.EXPORTED}
+                ):
+                    raise StaleWorkflowError(
+                        "workflow changed during export"
+                    )
+                if _input_hashes(inputs) != expected_hashes:
+                    raise ValueError(
+                        "input files changed before publication"
+                    )
+                if output.exists():
+                    if not output.is_dir() or any(output.iterdir()):
+                        raise FileExistsError(
+                            "session destination must not exist or must be empty"
+                        )
+                    output.rmdir()
+                temporary_output.replace(output)
+                temporary_output = None
+                self._session = stored_session
+                self._state = WorkflowState.EXPORTED
+                self._error_message = None
+                return returned_session
         except Exception as exc:
             with self._lock:
                 if (
@@ -576,17 +621,9 @@ class DesktopWorkflow:
                 self._state = WorkflowState.ERROR
                 self._error_message = str(exc)
             raise
-        with self._lock:
-            if (
-                generation != self._generation
-                or self._state
-                not in {WorkflowState.SCANNED, WorkflowState.EXPORTED}
-            ):
-                raise StaleWorkflowError("workflow changed during export")
-            self._session = copy.deepcopy(session)
-            self._state = WorkflowState.EXPORTED
-            self._error_message = None
-            return copy.deepcopy(self._session)
+        finally:
+            if temporary_output is not None:
+                shutil.rmtree(temporary_output, ignore_errors=True)
 
     def reopen(self, session_directory: str | Path) -> dict[str, object]:
         try:

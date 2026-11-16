@@ -7,8 +7,12 @@ import json
 from pathlib import Path
 
 from .depth_scan import PropagationParameters, evaluate_depth_scan
-from .image_io import load_grayscale_image
-from .session import export_session, load_float_tiff
+from .image_io import load_grayscale_bytes
+from .session import (
+    export_session,
+    load_float_tiff_bytes,
+    snapshot_input_files,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,15 +43,24 @@ def main(argv: list[str] | None = None) -> int:
         depth_step_um=args.depth_step_um,
         roi_size_px=args.roi_size_px,
     )
-    signal = load_grayscale_image(args.signal)
-    backgrounds = [load_grayscale_image(path) for path in args.background]
-    prepared, scan = evaluate_depth_scan(signal, backgrounds, parameters)
     inputs: dict[str, Path] = {"signal": args.signal}
     inputs.update({f"background_{index}": path for index, path in enumerate(args.background, start=1)})
+    if args.reference_plane is not None:
+        inputs["reference_plane"] = args.reference_plane
+    snapshots = snapshot_input_files(inputs)
+    expected_input_hashes = {
+        role: snapshot.sha256 for role, snapshot in snapshots.items()
+    }
+
+    signal = load_grayscale_bytes(snapshots["signal"].content)
+    backgrounds = [
+        load_grayscale_bytes(snapshots[f"background_{index}"].content)
+        for index in range(1, len(args.background) + 1)
+    ]
     reference = None
     if args.reference_plane is not None:
-        reference = load_float_tiff(args.reference_plane)
-        inputs["reference_plane"] = args.reference_plane
+        reference = load_float_tiff_bytes(snapshots["reference_plane"].content)
+    prepared, scan = evaluate_depth_scan(signal, backgrounds, parameters)
     session = export_session(
         args.output,
         prepared=prepared,
@@ -55,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         parameters=parameters,
         selected_depth_um=args.selected_depth_um,
         inputs=inputs,
+        expected_input_hashes=expected_input_hashes,
         reference=reference,
     )
     print(json.dumps(session, ensure_ascii=False, sort_keys=True, indent=2))

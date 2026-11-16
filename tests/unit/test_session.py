@@ -14,7 +14,10 @@ from lensless_holography_workbench.session import (
     export_session,
     load_float_tiff,
     reopen_session,
+    save_float_tiff,
     sha256_file,
+    snapshot_input_files,
+    snapshot_input_hashes,
 )
 
 
@@ -93,6 +96,165 @@ class SessionTests(unittest.TestCase):
             first = {path.name: sha256_file(path) for path in (base / "first").iterdir() if path.is_file()}
             second = {path.name: sha256_file(path) for path in (base / "second").iterdir() if path.is_file()}
         self.assertEqual(first, second)
+
+    def test_expected_input_hashes_are_recorded_without_drift(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            inputs = self._inputs(base)
+            expected = snapshot_input_hashes(inputs)
+
+            session = export_session(
+                base / "session",
+                prepared=self.prepared,
+                scan=self.scan,
+                parameters=self.parameters,
+                selected_depth_um=1.0,
+                inputs=inputs,
+                expected_input_hashes=expected,
+            )
+
+        recorded = {row["role"]: row["sha256"] for row in session["inputs"]}
+        self.assertEqual(recorded, expected)
+
+    def test_changed_expected_input_leaves_no_partial_session(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            inputs = self._inputs(base)
+            expected = snapshot_input_hashes(inputs)
+            inputs["signal"].write_bytes(b"changed-after-processing")
+            output = base / "session"
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "changed since processing: signal",
+            ):
+                export_session(
+                    output,
+                    prepared=self.prepared,
+                    scan=self.scan,
+                    parameters=self.parameters,
+                    selected_depth_um=1.0,
+                    inputs=inputs,
+                    expected_input_hashes=expected,
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_expected_input_hash_roles_must_match_exactly(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            inputs = self._inputs(base)
+            output = base / "session"
+
+            with self.assertRaisesRegex(ValueError, "exactly match input roles"):
+                export_session(
+                    output,
+                    prepared=self.prepared,
+                    scan=self.scan,
+                    parameters=self.parameters,
+                    selected_depth_um=1.0,
+                    inputs=inputs,
+                    expected_input_hashes={
+                        "signal": sha256_file(inputs["signal"]),
+                    },
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_snapshot_rejects_mutation_while_hashing(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            inputs = self._inputs(base)
+
+            def mutate_after_hash(path: str | Path) -> str:
+                digest = sha256_file(path)
+                Path(path).write_bytes(b"changed-during-hash")
+                return digest
+
+            with (
+                patch(
+                    "lensless_holography_workbench.session.sha256_file",
+                    side_effect=mutate_after_hash,
+                ),
+                self.assertRaisesRegex(ValueError, "changed while hashing: signal"),
+            ):
+                snapshot_input_hashes({"signal": inputs["signal"]})
+
+    def test_input_snapshot_enforces_the_file_byte_limit(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            path = Path(temporary) / "oversized.bin"
+            path.write_bytes(b"12345")
+
+            with (
+                patch(
+                    "lensless_holography_workbench.session.MAX_INPUT_FILE_BYTES",
+                    4,
+                ),
+                self.assertRaisesRegex(ValueError, "exceeds byte limit: signal"),
+            ):
+                snapshot_input_files({"signal": path})
+
+    def test_input_snapshot_enforces_total_limit_before_next_read(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            first = base / "first.bin"
+            second = base / "second.bin"
+            first.write_bytes(b"1234")
+            second.write_bytes(b"5678")
+
+            with (
+                patch(
+                    "lensless_holography_workbench.session.MAX_INPUT_FILE_BYTES",
+                    10,
+                ),
+                patch(
+                    "lensless_holography_workbench.session.MAX_TOTAL_INPUT_BYTES",
+                    6,
+                ),
+                self.assertRaisesRegex(ValueError, "total byte limit"),
+            ):
+                snapshot_input_files({"first": first, "second": second})
+
+    def test_input_mutation_during_staging_prevents_publication(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:
+            base = Path(temporary)
+            inputs = self._inputs(base)
+            expected = snapshot_input_hashes(inputs)
+            output = base / "session"
+            changed = False
+
+            def save_then_mutate(path: str | Path, array: np.ndarray) -> Path:
+                nonlocal changed
+                result = save_float_tiff(path, array)
+                if not changed:
+                    inputs["signal"].write_bytes(b"changed-during-staging")
+                    changed = True
+                return result
+
+            with (
+                patch(
+                    "lensless_holography_workbench.session.save_float_tiff",
+                    side_effect=save_then_mutate,
+                ),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "changed since processing: signal",
+                ),
+            ):
+                export_session(
+                    output,
+                    prepared=self.prepared,
+                    scan=self.scan,
+                    parameters=self.parameters,
+                    selected_depth_um=1.0,
+                    inputs=inputs,
+                    expected_input_hashes=expected,
+                )
+
+            self.assertFalse(output.exists())
+            self.assertFalse(
+                any(path.name.startswith(".session.tmp-") for path in base.iterdir())
+            )
 
     def test_comparison_artifacts_do_not_claim_acceptance(self) -> None:
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as temporary:

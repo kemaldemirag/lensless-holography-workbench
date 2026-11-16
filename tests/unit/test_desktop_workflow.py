@@ -191,6 +191,23 @@ class DesktopWorkflowTests(unittest.TestCase):
 
         self.assertEqual(workflow.state, WorkflowState.ERROR)
 
+    def test_snapshot_failure_does_not_leave_workflow_running(self) -> None:
+        workflow = self._configured()
+
+        with (
+            patch(
+                "lensless_holography_workbench.desktop_workflow.snapshot_input_files",
+                side_effect=ValueError("simulated snapshot failure"),
+            ),
+            self.assertRaisesRegex(ValueError, "simulated snapshot failure"),
+        ):
+            workflow.begin_scan()
+
+        self.assertEqual(workflow.state, WorkflowState.READY)
+        request = workflow.begin_scan()
+        self.assertTrue(workflow.cancel_scan())
+        self.assertTrue(request.cancel_event.is_set())
+
     def test_selected_depth_must_be_on_scan_grid(self) -> None:
         workflow = self._configured()
         self._scan(workflow)
@@ -241,6 +258,37 @@ class DesktopWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow.state, WorkflowState.ERROR)
         self.assertFalse(output.exists())
 
+    def test_input_mutation_after_inner_export_blocks_final_publish(self) -> None:
+        workflow = self._configured()
+        self._scan(workflow)
+        output = self.base / "late-mutation-session"
+
+        def export_then_mutate(
+            *args: object,
+            **kwargs: object,
+        ) -> dict[str, object]:
+            session = core_export_session(*args, **kwargs)
+            self.signal.write_bytes(b"changed-after-inner-export")
+            return session
+
+        with (
+            patch(
+                "lensless_holography_workbench.desktop_workflow.export_session",
+                side_effect=export_then_mutate,
+            ),
+            self.assertRaisesRegex(ValueError, "changed before publication"),
+        ):
+            workflow.export(output)
+
+        self.assertEqual(workflow.state, WorkflowState.ERROR)
+        self.assertFalse(output.exists())
+        self.assertFalse(
+            any(
+                path.name.startswith(".late-mutation-session.workflow-")
+                for path in self.base.iterdir()
+            )
+        )
+
     def test_export_result_is_not_published_after_new_scan_is_cancelled(self) -> None:
         workflow = self._configured()
         self._scan(workflow)
@@ -276,6 +324,13 @@ class DesktopWorkflowTests(unittest.TestCase):
         self.assertIsInstance(failures[0], StaleWorkflowError)
         self.assertEqual(workflow.state, WorkflowState.CANCELLED)
         self.assertIsNone(workflow.session)
+        self.assertFalse((self.base / "stale-session").exists())
+        self.assertFalse(
+            any(
+                path.name.startswith(".stale-session.workflow-")
+                for path in self.base.iterdir()
+            )
+        )
 
     def test_export_and_session_property_are_defensive_copies(self) -> None:
         workflow = self._configured()
